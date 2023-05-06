@@ -25,7 +25,7 @@ async function getStateRootHash(networkName) {
 }
 
 function serializeParam(t, v) {
-    switch (type) {
+    switch (t) {
         case CasperSDK.BOOL_ID:
             return CLValueBuilder.bool(v)
         case CasperSDK.KEY_ID:
