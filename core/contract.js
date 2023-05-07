@@ -3,11 +3,11 @@ const {
     helpers,
     CasperContractClient,
 } = require("casper-js-client-helper");
+const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 
-const { CLValueBuilder, RuntimeArgs, CLAccountHash, CLString, CLPublicKey, CLKey, CLByteArray, CLValueParsers, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID } = require("casper-js-sdk");
+const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID } = require("casper-js-sdk");
 const CasperSDK = require('casper-js-sdk')
-const { setClient, contractSimpleGetter, createRecipientAddress } = helpers;
-let blake = require("blakejs")
+const { setClient, contractSimpleGetter } = helpers;
 const axios = require('axios')
 
 function getNetwork(networkName) {
@@ -118,7 +118,7 @@ const Contract = class {
         const namedKeys = this.namedKeys
         for (const _nk of this.namedKeysList) {
             const nk = utils.camelCased(_nk)
-            this.getter[`${nk}`] = async function (itemKey) {
+            this.getter[`${nk}`] = async function (itemKey, isRaw) {
                 try {
                     const uref = namedKeys[nk]
                     const stateRootHash = await getStateRootHash(chainName)
@@ -127,6 +127,31 @@ const Contract = class {
 
                     if (stateOfNK) {
                         if (stateOfNK.cl_type == 'Unit') {
+                            if (isRaw) {
+                                const transport = new HTTPTransport(nodeAddress);
+                                const client = new Client(new RequestManager([transport]));
+                                console.log('reading', contractHash, _nk, itemKey)
+                                const res = await client.request({
+                                    method: 'state_get_dictionary_item',
+                                    params: {
+                                      state_root_hash: stateRootHash,
+                                      dictionary_identifier: {
+                                        URef: {
+                                          seed_uref: uref,
+                                          dictionary_item_key: itemKey
+                                        }
+                                      }
+                                    }
+                                  });
+                                let storedValueJson;
+                                if (res.error) {
+                                    throw new Error("Cannot read raw data")
+                                } else {
+                                    storedValueJson = res.stored_value;
+                                }
+                                const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
+                                return rawBytes
+                            } 
                             const result = await utils.contractDictionaryGetter(
                                 nodeAddress,
                                 itemKey.toString(),
@@ -134,6 +159,27 @@ const Contract = class {
                             );
                             return result.data
                         } else {
+                            if (isRaw) {
+                                const transport = new HTTPTransport(nodeAddress);
+                                const client = new Client(new RequestManager([transport]));
+                                const res = await client.request({
+                                    method: 'state_get_item',
+                                    params: {
+                                        state_root_hash: stateRootHash,
+                                        key: "hash-" + contractHash,
+                                        path: [_nk]
+                                    }
+                                });
+                                let storedValueJson;
+                                if (res.error) {
+                                    throw new Error("Cannot read raw data")
+                                } else {
+                                    storedValueJson = res.stored_value;
+                                }
+                                const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
+                                return rawBytes
+                            } 
+
                             let ret = await contractSimpleGetter(nodeAddress, contractHash, [
                                 _nk
                             ]);
@@ -228,6 +274,25 @@ const Contract = class {
         const data = await axios.get(`${apiToGetABI}?state_root_hash=${stateRootHash}&key=hash-${contractHash}`)
         const ABI = data.data.result.stored_value.Contract
         return await Contract.createInstance(contractHash, nodeAddress, chainName, ABI)
+    }
+
+    static async getPackageInfo(contractPackageHash, chainName) {
+        const stateRootHash = await getStateRootHash(chainName)
+        const data = await axios.get(`${getAPIToGetABI(chainName)}?state_root_hash=${stateRootHash}&key=hash-${contractPackageHash}`)
+        const packageInfo = data.data.result.stored_value.ContractPackage
+        return packageInfo
+    }
+
+    static async getActiveContractHash(contractPackageHash, chainName) {
+        const packageInfo = await Contract.getPackageInfo(contractPackageHash, chainName)
+        const versions = packageInfo.versions
+        let lastVersion = {};
+        versions.forEach(e => {
+            if (!lastVersion.contract_version || e.contract_version > lastVersion.contract_version) {
+                lastVersion = e
+            }
+        })
+        return lastVersion.contract_hash.substring("contract-".length)
     }
 }
 
