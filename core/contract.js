@@ -7,8 +7,9 @@ const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 
 const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID, CLValueParsers, CLTypeTag } = require("casper-js-sdk");
 const CasperSDK = require('casper-js-sdk')
-const { setClient, contractSimpleGetter } = helpers;
-const axios = require('axios')
+const { setClient, contractSimpleGetter, installContract } = helpers;
+const axios = require('axios');
+const { DEFAULT_TTL } = require("casper-js-client-helper/dist/constants");
 
 function getNetwork(networkName) {
     return networkName == 'casper' ? 'mainnet' : 'testnet'
@@ -24,6 +25,16 @@ async function getStateRootHash(networkName) {
     return data.data.result.last_added_block_info.state_root_hash
 }
 
+/**
+ * The function takes a type and value as input and returns a serialized CLValueBuilder object based on
+ * the type.
+ * @param t - The type of the parameter being serialized.
+ * @param v - The value to be serialized into a CLValue.
+ * @returns a serialized CLValue (CasperLabs Value) based on the input type and value. The CLValue is
+ * built using the CLValueBuilder class from the CasperSDK library. The specific CLValue type is
+ * determined by the input type (t) using a switch statement, and the corresponding CLValueBuilder
+ * method is called with the input value (v) as a parameter. If
+ */
 function serializeParam(t, v) {
     switch (t) {
         case CasperSDK.BOOL_ID:
@@ -79,7 +90,30 @@ function serializeParam(t, v) {
     }
 }
 
+/* The above code defines a JavaScript class called `Contract` that provides methods for interacting
+with a smart contract on the Casper blockchain. The class constructor takes in parameters such as
+the contract hash, node address, chain name, named keys list, and entry points. The class has
+methods for initializing the contract, creating getter functions, creating methods for making
+unsigned deploys and sending deploys, parsing events from a Casper deploy, creating an instance of a
+smart contract, retrieving information about a contract package, retrieving the active contract hash
+for a given contract package hash and chain name, and installing a smart contract */
 const Contract = class {
+    /**
+     * This is a constructor function that initializes properties for a Casper contract client object.
+     * @param contractHash - The hash of the smart contract on the Casper blockchain.
+     * @param nodeAddress - The nodeAddress parameter is the address of the node that the
+     * CasperContractClient will use to interact with the Casper blockchain. It is typically in the
+     * format of "http://<ip_address>:<port>".
+     * @param chainName - The name of the Casper blockchain network that the contract is deployed on.
+     * @param [namedKeysList] - `namedKeysList` is an optional parameter that is an array of named keys
+     * associated with the contract. Named keys are used to store and retrieve data from the contract's
+     * global state. They can be used to store information such as account balances, contract
+     * configuration settings, and more. If provided, the
+     * @param [entryPoints] - `entryPoints` is an optional parameter that represents the list of entry
+     * points of a smart contract. An entry point is a function that can be called from outside the
+     * contract to interact with it. It is defined in the smart contract code and can have parameters
+     * and return values. By providing a list of
+     */
     constructor(contractHash, nodeAddress, chainName, namedKeysList = [], entryPoints = []) {
         this.contractHash = contractHash.startsWith("hash-")
             ? contractHash.slice(5)
@@ -91,6 +125,10 @@ const Contract = class {
         this.entryPoints = entryPoints
     }
 
+    /**
+     * This function initializes a JavaScript object with various properties and methods for
+     * interacting with a smart contract on a blockchain network.
+     */
     async init() {
         const { contractPackageHash, namedKeys } = await setClient(
             this.nodeAddress,
@@ -213,7 +251,7 @@ const Contract = class {
             const epName = utils.camelCased(ep.name)
             const contractClient = this.contractClient
             this.contractCalls[`${epName}`] = {
-                makeUnsignedDeploy: async function ({ publicKey, args = {}, paymentAmount, ttl }) {
+                makeUnsignedDeploy: async function ({ publicKey, args = {}, paymentAmount, ttl = DEFAULT_TTL }) {
                     const argNames = Object.keys(args)
                     const argMap = {}
                     for (const argName of argNames) {
@@ -245,7 +283,7 @@ const Contract = class {
                         CasperSDK.DeployUtil.standardPayment(paymentAmount),
                     )
                 },
-                makeDeployAndSend: async function ({ keys, args = {}, paymentAmount, ttl }) {
+                makeDeployAndSend: async function ({ keys, args = {}, paymentAmount, ttl = DEFAULT_TTL }) {
                     const argNames = Object.keys(args)
                     const argMap = {}
                     for (const argName of argNames) {
@@ -352,6 +390,21 @@ const Contract = class {
 
     }
 
+    /**
+     * This function creates an instance of a smart contract using its contract hash, node address,
+     * chain name, and ABI.
+     * @param contractHash - The hash of the smart contract that you want to create an instance of.
+     * @param nodeAddress - The nodeAddress parameter is the address of the node that the contract will
+     * be deployed on. It is typically a URL or IP address.
+     * @param chainName - The `chainName` parameter is a string that represents the name of the
+     * blockchain network on which the smart contract is deployed. It could be the name of a public
+     * blockchain network like Ethereum or a private blockchain network like Hyperledger Fabric.
+     * @param abi - abi stands for "Application Binary Interface". It is a JSON file that describes the
+     * interface of a smart contract, including its functions, arguments, and return types. The ABI is
+     * used by clients to interact with the smart contract on the blockchain.
+     * @returns The function `createInstance` returns a Promise that resolves to an instance of the
+     * `Contract` class.
+     */
     static async createInstance(contractHash, nodeAddress, chainName, abi) {
         const namedKeysList = (abi.named_keys ? abi.named_keys : []).map(e => e.name)
         const instance = new Contract(contractHash, nodeAddress, chainName, namedKeysList, abi.entry_points ? abi.entry_points : []);
@@ -359,6 +412,18 @@ const Contract = class {
         return instance;
     }
 
+    /**
+     * This function creates an instance of a contract with a remote ABI by fetching the ABI from a
+     * specified API endpoint.
+     * @param contractHash - The hash of the smart contract that you want to create an instance of.
+     * @param nodeAddress - The `nodeAddress` parameter is the address of the node that the contract
+     * instance will be connected to. This is typically a URL or IP address that points to a node
+     * running on a blockchain network.
+     * @param chainName - The name of the blockchain network on which the contract is deployed.
+     * Examples include Ethereum, Binance Smart Chain, etc.
+     * @returns a Promise that resolves to an instance of the Contract class with the specified
+     * contract hash, node address, chain name, and ABI.
+     */
     static async createInstanceWithRemoteABI(contractHash, nodeAddress, chainName) {
         const apiToGetABI = getAPIToGetABI(chainName)
         const stateRootHash = await getStateRootHash(chainName)
@@ -367,6 +432,18 @@ const Contract = class {
         return await Contract.createInstance(contractHash, nodeAddress, chainName, ABI)
     }
 
+    /**
+     * This function retrieves information about a contract package using its hash and the state root
+     * hash of a specified chain.
+     * @param contractPackageHash - The hash of the contract package for which you want to retrieve
+     * information.
+     * @param chainName - The `chainName` parameter is a string that represents the name of the
+     * blockchain network on which the contract package is deployed. It is used to retrieve the state
+     * root hash and the API endpoint to get the ABI (Application Binary Interface) of the contract
+     * package.
+     * @returns the information of a contract package identified by its hash, including its ABI
+     * (Application Binary Interface) and other metadata.
+     */
     static async getPackageInfo(contractPackageHash, chainName) {
         const stateRootHash = await getStateRootHash(chainName)
         const data = await axios.get(`${getAPIToGetABI(chainName)}?state_root_hash=${stateRootHash}&key=hash-${contractPackageHash}`)
@@ -374,6 +451,17 @@ const Contract = class {
         return packageInfo
     }
 
+    /**
+     * This function retrieves the active contract hash for a given contract package hash and chain
+     * name.
+     * @param contractPackageHash - The hash of the contract package that contains the contract
+     * version(s) you want to retrieve the active contract hash for.
+     * @param chainName - The `chainName` parameter is a string that represents the name of the
+     * blockchain network where the contract package is deployed. It is used to retrieve the package
+     * information from the specified blockchain network.
+     * @returns the hash of the latest active contract version for a given contract package hash and
+     * chain name.
+     */
     static async getActiveContractHash(contractPackageHash, chainName) {
         const packageInfo = await Contract.getPackageInfo(contractPackageHash, chainName)
         const versions = packageInfo.versions
@@ -384,6 +472,25 @@ const Contract = class {
             }
         })
         return lastVersion.contract_hash.substring("contract-".length)
+    }
+
+    /**
+     * This function installs a smart contract on a specified blockchain network and returns the
+     * transaction hash.
+     * @returns the hash of the installed contract.
+     */
+    static async makeInstallContractAndSend({ keys, args, paymentAmount, chainName, nodeAddress, wasmPath }) {
+        const runtimeArgs = RuntimeArgs.fromMap(args);
+        
+        const hash = await installContract(
+            chainName,
+            nodeAddress,
+            keys,
+            runtimeArgs,
+            paymentAmount,
+            wasmPath,
+        );
+        return hash
     }
 }
 
