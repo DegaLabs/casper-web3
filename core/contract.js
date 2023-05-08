@@ -5,7 +5,7 @@ const {
 } = require("casper-js-client-helper");
 const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 
-const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID } = require("casper-js-sdk");
+const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID, CLValueParsers, CLTypeTag } = require("casper-js-sdk");
 const CasperSDK = require('casper-js-sdk')
 const { setClient, contractSimpleGetter } = helpers;
 const axios = require('axios')
@@ -111,6 +111,12 @@ const Contract = class {
         await this.createMethods()
     }
 
+    /**
+     * This function creates getter functions for a smart contract in JavaScript.
+     * @returns This code is defining a function `createGetterFunctions()` that does not return
+     * anything. It creates getter functions for named keys in a contract and assigns them to the
+     * `getter` object.
+     */
     async createGetterFunctions() {
         const nodeAddress = this.nodeAddress
         const contractHash = this.contractHash
@@ -130,19 +136,18 @@ const Contract = class {
                             if (isRaw) {
                                 const transport = new HTTPTransport(nodeAddress);
                                 const client = new Client(new RequestManager([transport]));
-                                console.log('reading', contractHash, _nk, itemKey)
                                 const res = await client.request({
                                     method: 'state_get_dictionary_item',
                                     params: {
-                                      state_root_hash: stateRootHash,
-                                      dictionary_identifier: {
-                                        URef: {
-                                          seed_uref: uref,
-                                          dictionary_item_key: itemKey
+                                        state_root_hash: stateRootHash,
+                                        dictionary_identifier: {
+                                            URef: {
+                                                seed_uref: uref,
+                                                dictionary_item_key: itemKey
+                                            }
                                         }
-                                      }
                                     }
-                                  });
+                                });
                                 let storedValueJson;
                                 if (res.error) {
                                     throw new Error("Cannot read raw data")
@@ -151,7 +156,7 @@ const Contract = class {
                                 }
                                 const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
                                 return rawBytes
-                            } 
+                            }
                             const result = await utils.contractDictionaryGetter(
                                 nodeAddress,
                                 itemKey.toString(),
@@ -178,7 +183,7 @@ const Contract = class {
                                 }
                                 const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
                                 return rawBytes
-                            } 
+                            }
 
                             let ret = await contractSimpleGetter(nodeAddress, contractHash, [
                                 _nk
@@ -194,6 +199,12 @@ const Contract = class {
         }
     }
 
+    /**
+     * This function creates and returns methods for making unsigned deploys and sending deploys for a
+     * given smart contract and its entry points.
+     * @returns The `createMethods()` function does not have a return statement, so it does not return
+     * anything.
+     */
     async createMethods() {
         const contractHash = this.contractHash
         const chainName = this.chainName
@@ -202,7 +213,7 @@ const Contract = class {
             const epName = utils.camelCased(ep.name)
             const contractClient = this.contractClient
             this.contractCalls[`${epName}`] = {
-                makeUnsignedDeploy: async function ({ publicKey, args = {}, paymentAmount, ttl}) {
+                makeUnsignedDeploy: async function ({ publicKey, args = {}, paymentAmount, ttl }) {
                     const argNames = Object.keys(args)
                     const argMap = {}
                     for (const argName of argNames) {
@@ -257,8 +268,88 @@ const Contract = class {
                     });
                 }
             }
-
         }
+    }
+
+    /**
+     * This function parses events from a Casper deploy based on specified event specifications and a
+     * contract package hash.
+     * @param eventSpecs - `eventSpecs` is an object mapping from event name to a list of named fields emited by events
+     * for example: eventSpecs = {
+     *       request_bridge_erc20: ["contract_package_hash", "event_type", "erc20_contract", "request_index"],
+     *       unlock_erc20: ["contract_package_hash", "event_type", "erc20_contract", "amount", "from", "to", "unlock_id"]
+     *       }
+     * @param deploy - `deploy` is an object that represents a deployment transaction on the Casper
+     * blockchain. It contains information about the deployed contract, such as the execution result
+     * and any associated transforms. This object is used in the `parseEvents` function to extract
+     * events emitted by the deployed contract.
+     */
+    static parseEvents(eventSpecs, deploy, contractPackageHash) {
+        const eventNames = Object.keys(eventSpecs)
+        for(const en of eventNames) {
+            if (!eventSpecs[en].includes('contract_package_hash')) {
+                eventSpecs[en].push('contract_package_hash')
+            }
+
+            if (!eventSpecs[en].includes('event_type')) {
+                eventSpecs[en].push('event_type')
+            }
+        }
+
+        const value = deploy
+
+        if (value.execution_result.result.Success) {
+            const { transforms } =
+                value.execution_result.result.Success.effect;
+
+            const eventInstances = transforms.reduce((acc, val) => {
+                if (
+                    val.transform.hasOwnProperty("WriteCLValue") &&
+                    typeof val.transform.WriteCLValue.parsed === "object" &&
+                    val.transform.WriteCLValue.parsed !== null
+                ) {
+                    const maybeCLValue = CLValueParsers.fromJSON(
+                        val.transform.WriteCLValue
+                    );
+                    const clValue = maybeCLValue.unwrap();
+                    if (clValue && clValue.clType().tag === CLTypeTag.Map) {
+                        const hash = (clValue).get(
+                            CLValueBuilder.string("contract_package_hash")
+                        );
+                        const event = (clValue).get(CLValueBuilder.string("event_type"));
+                        if (
+                            hash &&
+                            (hash.data === contractPackageHash) &&
+                            event &&
+                            eventNames.includes(event.data)
+                        ) {
+                            const data = {}
+                            for (const c of clValue.data) {
+                                data[c[0].data] = c[1].data
+                            }
+                            // check whether data has enough fields
+                            const requiredFields = eventSpecs[event.value().toLowerCase()]
+                            const good = true
+                            for (const f of requiredFields) {
+                                if (!data[f]) {
+                                    good = false
+                                    break
+                                }
+                            }
+                            if (good) {
+                                acc = [...acc, { name: event.value(), data }];
+                            }
+                        }
+                    }
+                }
+                return acc;
+            }, []);
+
+            return { error: null, success: !!eventInstances.length, data: eventInstances };
+        }
+
+        return null;
+
     }
 
     static async createInstance(contractHash, nodeAddress, chainName, abi) {
