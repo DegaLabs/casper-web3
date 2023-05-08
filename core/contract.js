@@ -5,7 +5,7 @@ const {
 } = require("casper-js-client-helper");
 const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 
-const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID, CLValueParsers, CLTypeTag } = require("casper-js-sdk");
+const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC } = require("casper-js-sdk");
 const CasperSDK = require('casper-js-sdk')
 const { setClient, contractSimpleGetter, installContract } = helpers;
 const axios = require('axios');
@@ -324,7 +324,7 @@ const Contract = class {
      */
     static parseEvents(eventSpecs, deploy, contractPackageHash) {
         const eventNames = Object.keys(eventSpecs)
-        for(const en of eventNames) {
+        for (const en of eventNames) {
             if (!eventSpecs[en].includes('contract_package_hash')) {
                 eventSpecs[en].push('contract_package_hash')
             }
@@ -388,6 +388,45 @@ const Contract = class {
 
         return null;
 
+    }
+
+    /**
+     * This function parses events for a given block number and contract package hash using a
+     * CasperServiceByJsonRPC client.
+     * @param eventSpecs - An object containing the specifications of the events to be parsed. It
+     * includes the event names and their corresponding argument types.
+     * @param blockNumber - The block number for which events need to be parsed.
+     * @param contractPackageHash - The hash of the smart contract package that contains the contract
+     * code being executed in the specified block.
+     * @param nodeAddress - The address of the node that the CasperServiceByJsonRPC client will connect
+     * to.
+     * @returns an object containing the events parsed from the specified block, filtered by the
+     * specified event specifications, for the specified contract package hash and node address. The
+     * object has deploy hashes as keys and the corresponding parsed events as values.
+     */
+    static async parseEventsForBlock(eventSpecs, blockNumber, contractPackageHash, nodeAddress) {
+        const client = new CasperServiceByJsonRPC(
+            nodeAddress
+        );
+
+        const block = await client.getBlockInfoByHeight(blockNumber);
+        const deployHashes = block.block.body.deploy_hashes;
+        const ret = {}
+
+        for (const h of deployHashes) {
+            let deployResult = await client.getDeployInfo(h);
+            if (deployResult.execution_results) {
+                let result = deployResult.execution_results[0];
+                if (result.result.Success) {
+                    const events = await Contract.parseEvents(eventSpecs, deployResult, contractPackageHash)
+                    if (events) {
+                        ret[h] = events
+                    }
+                }
+            }
+        }
+
+        return ret
     }
 
     /**
@@ -481,7 +520,7 @@ const Contract = class {
      */
     static async makeInstallContractAndSend({ keys, args, paymentAmount, chainName, nodeAddress, wasmPath }) {
         const runtimeArgs = RuntimeArgs.fromMap(args);
-        
+
         const hash = await installContract(
             chainName,
             nodeAddress,
