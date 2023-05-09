@@ -5,7 +5,7 @@ const {
 } = require("casper-js-client-helper");
 const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 
-const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC } = require("casper-js-sdk");
+const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, DeployUtil, Keys } = require("casper-js-sdk");
 const CasperSDK = require('casper-js-sdk')
 const { setClient, contractSimpleGetter, installContract } = helpers;
 const axios = require('axios');
@@ -519,6 +519,7 @@ const Contract = class {
      * @returns the hash of the installed contract.
      */
     static async makeInstallContractAndSend({ keys, args, paymentAmount, chainName, nodeAddress, wasmPath }) {
+        console.log('args', args)
         const runtimeArgs = RuntimeArgs.fromMap(args);
 
         const hash = await installContract(
@@ -531,6 +532,27 @@ const Contract = class {
         );
         return hash
     }
+
+    static async putSignatureAndSend(
+        publicKey ,
+        deploy,
+        signature,
+        nodeAddress,
+      ) {
+        const client = new CasperClient(nodeAddress)
+        const approval = new DeployUtil.Approval()
+        approval.signer = publicKey.toHex()
+        if (publicKey.isEd25519()) {
+          approval.signature = Keys.Ed25519.accountHex(signature)
+        } else {
+          approval.signature = Keys.Secp256K1.accountHex(signature)
+        }
+    
+        deploy.approvals.push(approval)
+    
+        const deployHash = await client.putDeploy(deploy)
+        return deployHash
+      }
 }
 
 module.exports = {
