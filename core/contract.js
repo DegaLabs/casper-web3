@@ -5,7 +5,7 @@ const {
 } = require("casper-js-client-helper");
 const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 
-const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, DeployUtil, Keys } = require("casper-js-sdk");
+const { CLValueBuilder, RuntimeArgs, LIST_ID, BYTE_ARRAY_ID, MAP_ID, TUPLE1_ID, TUPLE2_ID, TUPLE3_ID, OPTION_ID, RESULT_ID, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, DeployUtil, Keys, matchTypeToCLType, CLTuple2Type } = require("casper-js-sdk");
 const CasperSDK = require('casper-js-sdk')
 const { setClient, contractSimpleGetter, installContract } = helpers;
 const axios = require('axios');
@@ -69,25 +69,55 @@ function serializeParam(t, v) {
             break;
     }
 
-    if (LIST_ID in t) {
-        const splits = t.replace(" ", "").replace("]", "").splits("[")
-        const typeName = splits[1]
-        return CLValueBuilder.list(v.map(e => serializeParam(typeName, e)))
-    } else if (BYTE_ARRAY_ID in t) {
-        return CLValueBuilder.byteArray(v)
-    } else if (MAP_ID in t) {
-
-    } else if (TUPLE1_ID in type) {
-
-    } else if (TUPLE2_ID in type) {
-
-    } else if (TUPLE3_ID in type) {
-
-    } else if (OPTION_ID in type) {
-
-    } else if (RESULT_ID in type) {
-
-    }
+    const type = t
+    if (typeof type === typeof {}) {
+        if (LIST_ID in type) {
+          const inner = matchTypeToCLType(type[LIST_ID]);
+          return CLValueBuilder.list(v.map(e => serializeParam(inner.toString(), e)))
+        }
+        if (BYTE_ARRAY_ID in type) {
+          // const size = type[BYTE_ARRAY_ID];
+          return CLValueBuilder.byteArray(v)
+        }
+        if (MAP_ID in type) {
+          const keyType = matchTypeToCLType(type[MAP_ID].key);
+          const valType = matchTypeToCLType(type[MAP_ID].value);
+          const mapItems = v.map(e => [serializeParam(keyType, e[0]), serializeParam(valType, e[1])])          
+          return CLValueBuilder.map(mapItems)
+        }
+        if (TUPLE1_ID in type) {
+          const vals = type[TUPLE1_ID].map((t) => matchTypeToCLType(t));
+          const ret = []
+          for(var i = 0; i < vals.length; i++) {
+            ret.push(serializeParam(vals[i].toString(), v[i]))
+          }
+          return CLValueBuilder.tuple1(ret)
+        }
+        if (TUPLE2_ID in type) {
+          const vals = type[TUPLE2_ID].map((t) => matchTypeToCLType(t));
+          const ret = []
+          for(var i = 0; i < vals.length; i++) {
+            ret.push(serializeParam(vals[i].toString(), v[i]))
+          }
+          return CLValueBuilder.tuple2(ret)
+        }
+        if (TUPLE3_ID in type) {
+          const vals = type[TUPLE3_ID].map((t) => matchTypeToCLType(t));
+          const ret = []
+          for(var i = 0; i < vals.length; i++) {
+            ret.push(serializeParam(vals[i].toString(), v[i]))
+          }
+          return CLValueBuilder.tuple3(ret)
+        }
+        if (OPTION_ID in type) {
+          const inner = matchTypeToCLType(type[OPTION_ID]);
+          // return CLValueBuilder.option()
+        }
+        if (RESULT_ID in type) {
+            return
+        }
+        throw new Error(`The complex type ${type} is not supported`);
+      }
 }
 
 /* The above code defines a JavaScript class called `Contract` that provides methods for interacting
