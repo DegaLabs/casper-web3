@@ -292,7 +292,6 @@ const Contract = class {
                         }
 
                         argMap[`${argInEp.name}`] = serializeParam(argInEp.cl_type, argValue)
-                        return CasperSDK.DeployUtil.makeDeploy()
                     }
 
                     const contractHashAsByteArray = utils.contractHashToByteArray(contractHash)
@@ -582,7 +581,11 @@ const Contract = class {
     
         const deployHash = await client.putDeploy(deploy)
         return deployHash
-      }
+    }
+
+    static deployToJson(d) {
+        return DeployUtil.deployToJson(d)
+    }
 }
 
 module.exports = {
