@@ -586,6 +586,10 @@ const Contract = class {
     static deployToJson(d) {
         return DeployUtil.deployToJson(d)
     }
+
+    static deployFromJson(d) {
+        return DeployUtil.deployFromJson(d)
+    }
 }
 
 module.exports = {
