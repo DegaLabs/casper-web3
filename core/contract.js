@@ -120,6 +120,147 @@ function serializeParam(t, v) {
       }
 }
 
+/**
+ * The function creates an instance of a specific type based on the input type name.
+ * @param t - The parameter `t` is a string representing the type name of a Casper contract type.
+ * @returns The function `createInstanceFromTypeName` returns an instance of a class based on the input
+ * `t`, which is a string representing the type name. The specific class instance returned depends on
+ * the value of `t` and is determined by the switch statement.
+ */
+function createInstanceFromTypeName(t) {
+    switch (t) {
+        case CasperSDK.BOOL_ID:
+            return new CasperSDK.CLBoolType()
+        case CasperSDK.KEY_ID:
+            return new CasperSDK.CLKeyType()
+        case CasperSDK.PUBLIC_KEY_ID:
+            return new CasperSDK.CLPublicKeyType()
+        case CasperSDK.STRING_ID:
+            return new CasperSDK.CLStringType()
+        case CasperSDK.UREF_ID:
+            return new CasperSDK.CLURefType()
+        case CasperSDK.UNIT_ID:
+            return new CasperSDK.CLUnitType()
+        case CasperSDK.I32_ID:
+            return new CasperSDK.CLI32Type()
+        case CasperSDK.I64_ID:
+            return new CasperSDK.CLI64Type()
+        case CasperSDK.U8_ID:
+            return new CasperSDK.CLU8Type()
+        case CasperSDK.U32_ID:
+            return new CasperSDK.CLU32Type()
+        case CasperSDK.U64_ID:
+            return new CasperSDK.CLU64Type()
+        case CasperSDK.U128_ID:
+            return new CasperSDK.CLU128Type()
+        case CasperSDK.U256_ID:
+            return new CasperSDK.CLU256Type()
+        case CasperSDK.U512_ID:
+            return new CasperSDK.CLU512Type()
+        default:
+            break;
+    }
+}
+
+/**
+ * This function deserializes a parameter based on its type using various parsers in the CasperSDK
+ * library.
+ * @param t - The parameter `t` is a type identifier used to determine how to deserialize the value
+ * `v`. It is used in a switch statement to determine which deserialization method to use.
+ * @param v - The parameter `v` is a byte array that represents a serialized value of a specific type
+ * `t`. The function `deserializeParam` takes in the type `t` and the byte array `v` and returns the
+ * deserialized value of the specified type along with any remaining bytes in the byte array
+ * @returns an object with two properties: "remainder" and "value". The "remainder" property contains
+ * the remaining bytes after parsing the input value, and the "value" property contains the parsed
+ * value. The specific values and types of these properties depend on the input type (specified by the
+ * "t" parameter) and the input value (specified by the "v" parameter).
+ */
+function deserializeParam(t, v) {
+    let ret
+    switch (t) {
+        case CasperSDK.BOOL_ID:
+            ret = new CasperSDK.CLBoolBytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.KEY_ID:
+            ret = new CasperSDK.CLKeyBytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.PUBLIC_KEY_ID:
+            ret = new CasperSDK.CLPublicKeyBytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.STRING_ID:
+            ret = new CasperSDK.CLStringBytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.UREF_ID:
+            ret = new CasperSDK.CLURefBytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.UNIT_ID:
+            ret = new CasperSDK.CLUnitBytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.I32_ID:
+            ret = new CasperSDK.CLI32BytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.I64_ID:
+            ret = new CasperSDK.CLI64BytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.U8_ID:
+            ret = new CasperSDK.CLU8BytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.U32_ID:
+            ret = new CasperSDK.CLU32BytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.U64_ID:
+            ret = new CasperSDK.CLU64BytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.U128_ID:
+            ret = new CasperSDK.CLU128BytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.U256_ID:
+            ret = new CasperSDK.CLU256BytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        case CasperSDK.U512_ID:
+            ret = new CasperSDK.CLU512BytesParser().fromBytesWithRemainder(v)
+            return { remainder: ret.remainder, value: ret.result.val.value() }
+        default:
+            break;
+    }
+
+    const type = t
+    if (typeof type === typeof {}) {
+        if (LIST_ID in type) {
+          const inner = matchTypeToCLType(type[LIST_ID]);
+          ret = new CasperSDK.CLListBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLListType(createInstanceFromTypeName(inner.toString())))
+          return { remainder: ret.remainder, value: ret.result.val.value().map(e => e.data) }
+        }
+        if (BYTE_ARRAY_ID in type) {
+            return
+            // ret = new CasperSDK.CLByteArrayBytesParser().fromBytesWithRemainder(v)
+            // return CLValueBuilder.byteArray(v)
+        }
+        if (MAP_ID in type) {
+          const keyType = matchTypeToCLType(type[MAP_ID].key);
+          const valType = matchTypeToCLType(type[MAP_ID].value);
+          ret = new CasperSDK.CLMapBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLMapType([createInstanceFromTypeName(keyType.toString()), createInstanceFromTypeName(valType.toString())]))
+          return { remainder: ret.remainder, value: ret.result.val.value() }
+        }
+        if (TUPLE1_ID in type) {
+          return
+        }
+        if (TUPLE2_ID in type) {
+          return
+        }
+        if (TUPLE3_ID in type) {
+          return
+        }
+        if (OPTION_ID in type) {
+          return
+        }
+        if (RESULT_ID in type) {
+            return
+        }
+        throw new Error(`The complex type ${type} is not supported`);
+      }
+}
+
 /* The above code defines a JavaScript class called `Contract` that provides methods for interacting
 with a smart contract on the Casper blockchain. The class constructor takes in parameters such as
 the contract hash, node address, chain name, named keys list, and entry points. The class has
@@ -581,6 +722,28 @@ const Contract = class {
     
         const deployHash = await client.putDeploy(deploy)
         return deployHash
+    }
+
+    /**
+     * This function decodes data using a given set of types.
+     * @param data - The `data` parameter is the input data that needs to be decoded. It can be either
+     * a string of hexadecimal characters or a Uint8Array.
+     * @param types - an array of parameter types that need to be decoded from the input data.
+     * @returns The function `decodeData` returns an array of decoded values based on the input `data`
+     * and `types`.
+     */
+    static decodeData(data, types) {
+        if (typeof data == typeof String) {
+            data = Uint8Array.from(Buffer.from(data, 'hex'))
+        }
+        let remainder = data
+        const ret = []
+        for(var t of types) {
+            let { remainder: r, value: v } = deserializeParam(t, remainder)
+            remainder = r
+            ret.push(v)            
+        }
+        return ret
     }
 
     static deployToJson(d) {
