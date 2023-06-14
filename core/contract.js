@@ -338,7 +338,6 @@ const Contract = class {
                     const stateRootHash = await getStateRootHash(chainName)
                     let stateOfNK = await axios.get(`https://event-store-api-clarity-${getNetwork(chainName)}.make.services/rpc/state_get_item?state_root_hash=${stateRootHash}&key=${uref}`)
                     stateOfNK = stateOfNK.data.result.stored_value.CLValue
-
                     if (stateOfNK) {
                         if (stateOfNK.cl_type == 'Unit') {
                             if (isRaw) {
@@ -365,12 +364,13 @@ const Contract = class {
                                 const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
                                 return rawBytes
                             }
+                            // reading here
                             const result = await utils.contractDictionaryGetter(
                                 nodeAddress,
                                 itemKey.toString(),
                                 uref
                             );
-                            return result.data
+                            return result
                         } else {
                             if (isRaw) {
                                 const transport = new HTTPTransport(nodeAddress);
