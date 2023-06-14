@@ -223,13 +223,12 @@ function deserializeParam(t, v) {
         default:
             break;
     }
-
     const type = t
     if (typeof type === typeof {}) {
         if (LIST_TYPE in type) {
           const inner = matchTypeToCLType(type[LIST_TYPE]);
           ret = new CasperSDK.CLListBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLListType(createInstanceFromTypeName(inner.toString())))
-          return { remainder: ret.remainder, value: ret.result.val.value().map(e => e.data) }
+          return { remainder: ret.remainder, value: ret.result.val.value() }
         }
         if (BYTE_ARRAY_TYPE in type) {
             return
