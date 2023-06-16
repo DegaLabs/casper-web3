@@ -12,7 +12,7 @@ const axios = require('axios');
 const { DEFAULT_TTL } = require("casper-js-client-helper/dist/constants");
 
 function getNetwork(networkName) {
-    return networkName == 'casper' ? 'mainnet' : 'testnet'
+    return networkName == 'casper' ? 'mainnet' : (networkName == 'casper-test' ? 'testnet' : 'integration')
 }
 
 function getAPIToGetABI(networkName) {
