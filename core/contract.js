@@ -1,13 +1,12 @@
 const {
-    utils,
-    helpers,
-    CasperContractClient,
+    helpers
 } = require("casper-js-client-helper");
 const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
+const fs = require('fs');
 
 const { CLValueBuilder, RuntimeArgs, LIST_TYPE, BYTE_ARRAY_TYPE, MAP_TYPE, TUPLE1_TYPE, TUPLE2_TYPE, TUPLE3_TYPE, OPTION_TYPE, RESULT_TYPE, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, DeployUtil, Keys, matchTypeToCLType, CLTuple2Type } = require("casper-js-sdk");
 const CasperSDK = require('casper-js-sdk')
-const { setClient, contractSimpleGetter, installContract } = helpers;
+const { setClient } = helpers;
 const axios = require('axios');
 const { DEFAULT_TTL } = require("casper-js-client-helper/dist/constants");
 
@@ -25,6 +24,8 @@ async function getStateRootHash(networkName) {
     return data.data.result.last_added_block_info.state_root_hash
 }
 
+const contractHashToByteArray = (contractHash) => Uint8Array.from(Buffer.from(contractHash, "hex"));
+const camelCased = (myString) => myString.replace(/_([a-z])/g, (g) => g[1].toUpperCase())
 /**
  * The function takes a type and value as input and returns a serialized CLValueBuilder object based on
  * the type.
@@ -72,52 +73,52 @@ function serializeParam(t, v) {
     const type = t
     if (typeof type === typeof {}) {
         if (LIST_TYPE in type) {
-          const inner = matchTypeToCLType(type[LIST_TYPE]);
-          return CLValueBuilder.list(v.map(e => serializeParam(inner.toString(), e)))
+            const inner = matchTypeToCLType(type[LIST_TYPE]);
+            return CLValueBuilder.list(v.map(e => serializeParam(inner.toString(), e)))
         }
         if (BYTE_ARRAY_TYPE in type) {
-          // const size = type[BYTE_ARRAY_TYPE];
-          return CLValueBuilder.byteArray(v)
+            // const size = type[BYTE_ARRAY_TYPE];
+            return CLValueBuilder.byteArray(v)
         }
         if (MAP_TYPE in type) {
-          const keyType = matchTypeToCLType(type[MAP_TYPE].key);
-          const valType = matchTypeToCLType(type[MAP_TYPE].value);
-          const mapItems = v.map(e => [serializeParam(keyType, e[0]), serializeParam(valType, e[1])])          
-          return CLValueBuilder.map(mapItems)
+            const keyType = matchTypeToCLType(type[MAP_TYPE].key);
+            const valType = matchTypeToCLType(type[MAP_TYPE].value);
+            const mapItems = v.map(e => [serializeParam(keyType, e[0]), serializeParam(valType, e[1])])
+            return CLValueBuilder.map(mapItems)
         }
         if (TUPLE1_TYPE in type) {
-          const vals = type[TUPLE1_TYPE].map((t) => matchTypeToCLType(t));
-          const ret = []
-          for(var i = 0; i < vals.length; i++) {
-            ret.push(serializeParam(vals[i].toString(), v[i]))
-          }
-          return CLValueBuilder.tuple1(ret)
+            const vals = type[TUPLE1_TYPE].map((t) => matchTypeToCLType(t));
+            const ret = []
+            for (var i = 0; i < vals.length; i++) {
+                ret.push(serializeParam(vals[i].toString(), v[i]))
+            }
+            return CLValueBuilder.tuple1(ret)
         }
         if (TUPLE2_TYPE in type) {
-          const vals = type[TUPLE2_TYPE].map((t) => matchTypeToCLType(t));
-          const ret = []
-          for(var i = 0; i < vals.length; i++) {
-            ret.push(serializeParam(vals[i].toString(), v[i]))
-          }
-          return CLValueBuilder.tuple2(ret)
+            const vals = type[TUPLE2_TYPE].map((t) => matchTypeToCLType(t));
+            const ret = []
+            for (var i = 0; i < vals.length; i++) {
+                ret.push(serializeParam(vals[i].toString(), v[i]))
+            }
+            return CLValueBuilder.tuple2(ret)
         }
         if (TUPLE3_TYPE in type) {
-          const vals = type[TUPLE3_TYPE].map((t) => matchTypeToCLType(t));
-          const ret = []
-          for(var i = 0; i < vals.length; i++) {
-            ret.push(serializeParam(vals[i].toString(), v[i]))
-          }
-          return CLValueBuilder.tuple3(ret)
+            const vals = type[TUPLE3_TYPE].map((t) => matchTypeToCLType(t));
+            const ret = []
+            for (var i = 0; i < vals.length; i++) {
+                ret.push(serializeParam(vals[i].toString(), v[i]))
+            }
+            return CLValueBuilder.tuple3(ret)
         }
         if (OPTION_TYPE in type) {
-          const inner = matchTypeToCLType(type[OPTION_TYPE]);
-          // return CLValueBuilder.option()
+            const inner = matchTypeToCLType(type[OPTION_TYPE]);
+            // return CLValueBuilder.option()
         }
         if (RESULT_TYPE in type) {
             return
         }
         throw new Error(`The complex type ${type} is not supported`);
-      }
+    }
 }
 
 /**
@@ -129,7 +130,7 @@ function serializeParam(t, v) {
  */
 function createInstanceFromTypeName(t) {
     switch (t) {
-        case CasperSDK.BOOL_TYPE :
+        case CasperSDK.BOOL_TYPE:
             return new CasperSDK.CLBoolType()
         case CasperSDK.KEY_TYPE:
             return new CasperSDK.CLKeyType()
@@ -226,9 +227,9 @@ function deserializeParam(t, v) {
     const type = t
     if (typeof type === typeof {}) {
         if (LIST_TYPE in type) {
-          const inner = matchTypeToCLType(type[LIST_TYPE]);
-          ret = new CasperSDK.CLListBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLListType(createInstanceFromTypeName(inner.toString())))
-          return { remainder: ret.remainder, value: ret.result.val.value() }
+            const inner = matchTypeToCLType(type[LIST_TYPE]);
+            ret = new CasperSDK.CLListBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLListType(createInstanceFromTypeName(inner.toString())))
+            return { remainder: ret.remainder, value: ret.result.val.value() }
         }
         if (BYTE_ARRAY_TYPE in type) {
             return
@@ -236,28 +237,28 @@ function deserializeParam(t, v) {
             // return CLValueBuilder.byteArray(v)
         }
         if (MAP_TYPE in type) {
-          const keyType = matchTypeToCLType(type[MAP_TYPE].key);
-          const valType = matchTypeToCLType(type[MAP_TYPE].value);
-          ret = new CasperSDK.CLMapBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLMapType([createInstanceFromTypeName(keyType.toString()), createInstanceFromTypeName(valType.toString())]))
-          return { remainder: ret.remainder, value: ret.result.val.value() }
+            const keyType = matchTypeToCLType(type[MAP_TYPE].key);
+            const valType = matchTypeToCLType(type[MAP_TYPE].value);
+            ret = new CasperSDK.CLMapBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLMapType([createInstanceFromTypeName(keyType.toString()), createInstanceFromTypeName(valType.toString())]))
+            return { remainder: ret.remainder, value: ret.result.val.value() }
         }
         if (TUPLE1_TYPE in type) {
-          return
+            return
         }
         if (TUPLE2_TYPE in type) {
-          return
+            return
         }
         if (TUPLE3_TYPE in type) {
-          return
+            return
         }
         if (OPTION_TYPE in type) {
-          return
+            return
         }
         if (RESULT_TYPE in type) {
             return
         }
         throw new Error(`The complex type ${type} is not supported`);
-      }
+    }
 }
 
 /* The above code defines a JavaScript class called `Contract` that provides methods for interacting
@@ -290,7 +291,6 @@ const Contract = class {
             : contractHash;
         this.nodeAddress = nodeAddress;
         this.chainName = chainName;
-        this.contractClient = new CasperContractClient(nodeAddress, chainName);
         this.namedKeysList = namedKeysList
         this.entryPoints = entryPoints
     }
@@ -306,10 +306,6 @@ const Contract = class {
             this.namedKeysList
         );
         this.contractPackageHash = contractPackageHash;
-        this.contractClient.chainName = this.chainName
-        this.contractClient.contractHash = this.contractHash
-        this.contractClient.contractPackageHash = this.contractPackageHash
-        this.contractClient.nodeAddress = this.nodeAddress
         this.namedKeys = namedKeys;
 
         this.getter = {}
@@ -331,7 +327,7 @@ const Contract = class {
         const chainName = this.chainName
         const namedKeys = this.namedKeys
         for (const _nk of this.namedKeysList) {
-            const nk = utils.camelCased(_nk)
+            const nk = camelCased(_nk)
             this.getter[`${nk}`] = async function (itemKey, isRaw) {
                 try {
                     const uref = namedKeys[nk]
@@ -340,63 +336,56 @@ const Contract = class {
                     stateOfNK = stateOfNK.data.result.stored_value.CLValue
                     if (stateOfNK) {
                         if (stateOfNK.cl_type == 'Unit') {
-                            if (isRaw) {
-                                const transport = new HTTPTransport(nodeAddress);
-                                const client = new Client(new RequestManager([transport]));
-                                const res = await client.request({
-                                    method: 'state_get_dictionary_item',
-                                    params: {
-                                        state_root_hash: stateRootHash,
-                                        dictionary_identifier: {
-                                            URef: {
-                                                seed_uref: uref,
-                                                dictionary_item_key: itemKey
-                                            }
+                            const transport = new HTTPTransport(nodeAddress);
+                            const client = new Client(new RequestManager([transport]));
+                            const res = await client.request({
+                                method: 'state_get_dictionary_item',
+                                params: {
+                                    state_root_hash: stateRootHash,
+                                    dictionary_identifier: {
+                                        URef: {
+                                            seed_uref: uref,
+                                            dictionary_item_key: itemKey
                                         }
                                     }
-                                });
-                                let storedValueJson;
-                                if (res.error) {
-                                    throw new Error("Cannot read raw data")
-                                } else {
-                                    storedValueJson = res.stored_value;
                                 }
-                                const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
-                                return rawBytes
+                            });
+                            let storedValueJson;
+                            if (res.error) {
+                                throw new Error("Cannot read raw data")
+                            } else {
+                                storedValueJson = res.stored_value;
                             }
-                            // reading here
-                            const result = await utils.contractDictionaryGetter(
-                                nodeAddress,
-                                itemKey.toString(),
-                                uref
-                            );
-                            return result
-                        } else {
                             if (isRaw) {
-                                const transport = new HTTPTransport(nodeAddress);
-                                const client = new Client(new RequestManager([transport]));
-                                const res = await client.request({
-                                    method: 'state_get_item',
-                                    params: {
-                                        state_root_hash: stateRootHash,
-                                        key: "hash-" + contractHash,
-                                        path: [_nk]
-                                    }
-                                });
-                                let storedValueJson;
-                                if (res.error) {
-                                    throw new Error("Cannot read raw data")
-                                } else {
-                                    storedValueJson = res.stored_value;
-                                }
                                 const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
                                 return rawBytes
+                            } else {
+                                return storedValueJson.CLValue.value()
                             }
-
-                            let ret = await contractSimpleGetter(nodeAddress, contractHash, [
-                                _nk
-                            ]);
-                            return ret
+                        } else {
+                            const transport = new HTTPTransport(nodeAddress);
+                            const client = new Client(new RequestManager([transport]));
+                            const res = await client.request({
+                                method: 'state_get_item',
+                                params: {
+                                    state_root_hash: stateRootHash,
+                                    key: "hash-" + contractHash,
+                                    path: [_nk]
+                                }
+                            });
+                            let storedValueJson;
+                            if (res.error) {
+                                throw new Error("Cannot read raw data")
+                            } else {
+                                storedValueJson = res.stored_value;
+                            }
+                            
+                            if (isRaw) {
+                                const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
+                                return rawBytes
+                            } else {
+                                return storedValueJson.CLValue.value()
+                            }
                         }
                     }
                     return null
@@ -416,17 +405,17 @@ const Contract = class {
     async createMethods() {
         const contractHash = this.contractHash
         const chainName = this.chainName
+        const nodeAddress = this.nodeAddress
         const entryPoints = this.entryPoints
         for (const ep of entryPoints) {
-            const epName = utils.camelCased(ep.name)
-            const contractClient = this.contractClient
+            const epName = camelCased(ep.name)
             this.contractCalls[`${epName}`] = {
                 makeUnsignedDeploy: async function ({ publicKey, args = {}, paymentAmount, ttl = DEFAULT_TTL }) {
                     const argNames = Object.keys(args)
                     const argMap = {}
                     for (const argName of argNames) {
                         const argValue = args[argName]
-                        const argInEp = ep.args.find(e => utils.camelCased(e.name) == argName)
+                        const argInEp = ep.args.find(e => camelCased(e.name) == argName)
                         if (!argInEp) {
                             throw new Error('Invalid argument ' + argName)
                         }
@@ -434,7 +423,7 @@ const Contract = class {
                         argMap[`${argInEp.name}`] = serializeParam(argInEp.cl_type, argValue)
                     }
 
-                    const contractHashAsByteArray = utils.contractHashToByteArray(contractHash)
+                    const contractHashAsByteArray = contractHashToByteArray(contractHash)
 
                     return CasperSDK.DeployUtil.makeDeploy(
                         new CasperSDK.DeployUtil.DeployParams(
@@ -457,22 +446,42 @@ const Contract = class {
                     const argMap = {}
                     for (const argName of argNames) {
                         const argValue = args[argName]
-                        const argInEp = ep.args.find(e => utils.camelCased(e.name) == argName)
+                        const argInEp = ep.args.find(e => camelCased(e.name) == argName)
                         if (!argInEp) {
                             throw new Error('Invalid argument ' + argName)
                         }
 
                         argMap[`${argInEp.name}`] = serializeParam(argInEp.cl_type, argValue)
                     }
+                    
+                    const client = new CasperClient(nodeAddress)
+                    const contractHashAsByteArray = contractHashToByteArray(contractHash)
+                    const dependenciesBytes = [].map((d) =>
+                        Uint8Array.from(Buffer.from(d, 'hex')),
+                    )
 
-                    return await contractClient.contractCall({
-                        entryPoint: ep.name,
-                        keys: keys,
-                        paymentAmount: paymentAmount,
-                        runtimeArgs: RuntimeArgs.fromMap(argMap),
-                        cb: () => { },
-                        ttl
-                    });
+                    let deploy = DeployUtil.makeDeploy(
+                        new DeployUtil.DeployParams(
+                          keys.publicKey,
+                          chainName,
+                          1,
+                          ttl,
+                          dependenciesBytes,
+                        ),
+                        DeployUtil.ExecutableDeployItem.newStoredContractByHash(
+                          contractHashAsByteArray,
+                          ep.name,
+                          RuntimeArgs.fromMap(argMap)
+                        ),
+                        DeployUtil.standardPayment(paymentAmount),
+                    )
+
+                    // Sign deploy.
+                    deploy = client.signDeploy(deploy, keys)
+
+                    // Dispatch deploy to node.
+                    const deployHash = await client.putDeploy(deploy)
+                    return deployHash
                 }
             }
         }
@@ -689,35 +698,39 @@ const Contract = class {
      */
     static async makeInstallContractAndSend({ keys, args, paymentAmount, chainName, nodeAddress, wasmPath }) {
         const runtimeArgs = RuntimeArgs.fromMap(args);
-
-        const hash = await installContract(
-            chainName,
-            nodeAddress,
-            keys,
-            runtimeArgs,
-            paymentAmount,
-            wasmPath,
+        const wasmCodeFile = fs.readFileSync(wasmPath, null).buffer;
+        const session = DeployUtil.ExecutableDeployItem.newModuleBytes(
+            new Uint8Array(wasmCodeFile),
+            runtimeArgs
         );
+        const deployParams = new DeployUtil.DeployParams(CasperSDK.CLPublicKey.fromHex(keys.publicKey.toHex()), chainName)
+        const payment = DeployUtil.standardPayment(paymentAmount);
+        const deploy = DeployUtil.makeDeploy(deployParams, session, payment);
+
+        const client = new CasperClient(nodeAddress);
+        const signedDeploy = client.signDeploy(deploy, keys)
+        const hash = await client.putDeploy(signedDeploy);
+
         return hash
     }
 
     static async putSignatureAndSend(
-        publicKey ,
+        publicKey,
         deploy,
         signature,
         nodeAddress,
-      ) {
+    ) {
         const client = new CasperClient(nodeAddress)
         const approval = new DeployUtil.Approval()
         approval.signer = publicKey.toHex()
         if (publicKey.isEd25519()) {
-          approval.signature = Keys.Ed25519.accountHex(signature)
+            approval.signature = Keys.Ed25519.accountHex(signature)
         } else {
-          approval.signature = Keys.Secp256K1.accountHex(signature)
+            approval.signature = Keys.Secp256K1.accountHex(signature)
         }
-    
+
         deploy.approvals.push(approval)
-    
+
         const deployHash = await client.putDeploy(deploy)
         return deployHash
     }
@@ -736,10 +749,10 @@ const Contract = class {
         }
         let remainder = data
         const ret = []
-        for(var t of types) {
+        for (var t of types) {
             let { remainder: r, value: v } = deserializeParam(t, remainder)
             remainder = r
-            ret.push(v)            
+            ret.push(v)
         }
         return ret
     }
