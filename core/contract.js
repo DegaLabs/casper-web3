@@ -4,7 +4,7 @@ const {
 const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 const fs = require('fs');
 
-const { CLValueBuilder, RuntimeArgs, LIST_TYPE, BYTE_ARRAY_TYPE, MAP_TYPE, TUPLE1_TYPE, TUPLE2_TYPE, TUPLE3_TYPE, OPTION_TYPE, RESULT_TYPE, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, DeployUtil, Keys, matchTypeToCLType, CLTuple2Type } = require("casper-js-sdk");
+const { CLValueBuilder, RuntimeArgs, LIST_TYPE, BYTE_ARRAY_TYPE, MAP_TYPE, TUPLE1_TYPE, TUPLE2_TYPE, TUPLE3_TYPE, OPTION_TYPE, RESULT_TYPE, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, DeployUtil, Keys, matchTypeToCLType, CLValue } = require("casper-js-sdk");
 const CasperSDK = require('casper-js-sdk')
 const { setClient } = helpers;
 const axios = require('axios');
@@ -360,7 +360,11 @@ const Contract = class {
                                 const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
                                 return rawBytes
                             } else {
-                                return storedValueJson.CLValue.value()
+                                if (storedValueJson && storedValueJson.CLValue instanceof CLValue) {
+                                    return storedValueJson.CLValue.value();
+                                } else {
+                                    throw Error("Invalid stored value");
+                                }
                             }
                         } else {
                             const transport = new HTTPTransport(nodeAddress);
@@ -384,7 +388,11 @@ const Contract = class {
                                 const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
                                 return rawBytes
                             } else {
-                                return storedValueJson.CLValue.value()
+                                if (storedValueJson && storedValueJson.CLValue instanceof CLValue) {
+                                    return storedValueJson.CLValue.value();
+                                } else {
+                                    throw Error("Invalid stored value");
+                                }
                             }
                         }
                     }
