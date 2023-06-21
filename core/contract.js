@@ -44,7 +44,7 @@ function serializeParam(t, v) {
         case CasperSDK.KEY_TYPE:
             return CLValueBuilder.key(v)
         case CasperSDK.PUBLIC_KEY_TYPE:
-            return CLValueBuilder.publicKey(v)
+            return CasperSDK.CLPublicKey.fromHex(v)
         case CasperSDK.STRING_TYPE:
             return CLValueBuilder.string(v)
         case CasperSDK.UREF_TYPE:
