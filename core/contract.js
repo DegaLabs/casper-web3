@@ -74,7 +74,7 @@ function serializeParam(t, v) {
     const type = t
     if (typeof type === typeof {}) {
         if (CasperSDK.LIST_ID in type) {
-            const inner = matchTypeToCLType(type[LIST_ID]);
+            const inner = matchTypeToCLType(type[CasperSDK.LIST_ID]);
             return CLValueBuilder.list(v.map(e => serializeParam(inner.toString(), e)))
         }
         if (CasperSDK.BYTE_ARRAY_ID in type) {
@@ -82,8 +82,8 @@ function serializeParam(t, v) {
             return CLValueBuilder.byteArray(v)
         }
         if (CasperSDK.MAP_ID in type) {
-            const keyType = matchTypeToCLType(type[MAP_ID].key);
-            const valType = matchTypeToCLType(type[MAP_ID].value);
+            const keyType = matchTypeToCLType(type[CasperSDK.MAP_ID].key);
+            const valType = matchTypeToCLType(type[CasperSDK.MAP_ID].value);
             const mapItems = v.map(e => [serializeParam(keyType, e[0]), serializeParam(valType, e[1])])
             return CLValueBuilder.map(mapItems)
         }
@@ -226,35 +226,35 @@ function deserializeParam(t, v) {
     }
     const type = t
     if (typeof type === typeof {}) {
-        if (LIST_ID in type) {
-            const inner = matchTypeToCLType(type[LIST_ID]);
+        if (CasperSDK.LIST_ID in type) {
+            const inner = matchTypeToCLType(type[CasperSDK.LIST_ID]);
             ret = new CasperSDK.CLListBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLListType(createInstanceFromTypeName(inner.toString())))
             return { remainder: ret.remainder, value: ret.result.val.value() }
         }
-        if (BYTE_ARRAY_ID in type) {
+        if (CasperSDK.BYTE_ARRAY_ID in type) {
             return
             // ret = new CasperSDK.CLByteArrayBytesParser().fromBytesWithRemainder(v)
             // return CLValueBuilder.byteArray(v)
         }
-        if (MAP_ID in type) {
-            const keyType = matchTypeToCLType(type[MAP_ID].key);
-            const valType = matchTypeToCLType(type[MAP_ID].value);
+        if (CasperSDK.MAP_ID in type) {
+            const keyType = matchTypeToCLType(type[CasperSDK.MAP_ID].key);
+            const valType = matchTypeToCLType(type[CasperSDK.MAP_ID].value);
             ret = new CasperSDK.CLMapBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLMapType([createInstanceFromTypeName(keyType.toString()), createInstanceFromTypeName(valType.toString())]))
             return { remainder: ret.remainder, value: ret.result.val.value() }
         }
-        if (TUPLE1_ID in type) {
+        if (CasperSDK.TUPLE1_ID in type) {
             return
         }
-        if (TUPLE2_ID in type) {
+        if (CasperSDK.TUPLE2_ID in type) {
             return
         }
-        if (TUPLE3_ID in type) {
+        if (CasperSDK.TUPLE3_ID in type) {
             return
         }
-        if (OPTION_ID in type) {
+        if (CasperSDK.OPTION_ID in type) {
             return
         }
-        if (RESULT_ID in type) {
+        if (CasperSDK.RESULT_ID in type) {
             return
         }
         throw new Error(`The complex type ${type} is not supported`);
