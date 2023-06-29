@@ -73,21 +73,21 @@ function serializeParam(t, v) {
 
     const type = t
     if (typeof type === typeof {}) {
-        if (LIST_ID in type) {
+        if (CasperSDK.LIST_ID in type) {
             const inner = matchTypeToCLType(type[LIST_ID]);
             return CLValueBuilder.list(v.map(e => serializeParam(inner.toString(), e)))
         }
-        if (BYTE_ARRAY_ID in type) {
+        if (CasperSDK.BYTE_ARRAY_ID in type) {
             // const size = type[BYTE_ARRAY_ID];
             return CLValueBuilder.byteArray(v)
         }
-        if (MAP_ID in type) {
+        if (CasperSDK.MAP_ID in type) {
             const keyType = matchTypeToCLType(type[MAP_ID].key);
             const valType = matchTypeToCLType(type[MAP_ID].value);
             const mapItems = v.map(e => [serializeParam(keyType, e[0]), serializeParam(valType, e[1])])
             return CLValueBuilder.map(mapItems)
         }
-        if (TUPLE1_ID in type) {
+        if (CasperSDK.TUPLE1_ID in type) {
             const vals = type[TUPLE1_ID].map((t) => matchTypeToCLType(t));
             const ret = []
             for (var i = 0; i < vals.length; i++) {
@@ -95,7 +95,7 @@ function serializeParam(t, v) {
             }
             return CLValueBuilder.tuple1(ret)
         }
-        if (TUPLE2_ID in type) {
+        if (CasperSDK.TUPLE2_ID in type) {
             const vals = type[TUPLE2_ID].map((t) => matchTypeToCLType(t));
             const ret = []
             for (var i = 0; i < vals.length; i++) {
@@ -103,7 +103,7 @@ function serializeParam(t, v) {
             }
             return CLValueBuilder.tuple2(ret)
         }
-        if (TUPLE3_ID in type) {
+        if (CasperSDK.TUPLE3_ID in type) {
             const vals = type[TUPLE3_ID].map((t) => matchTypeToCLType(t));
             const ret = []
             for (var i = 0; i < vals.length; i++) {
@@ -111,10 +111,10 @@ function serializeParam(t, v) {
             }
             return CLValueBuilder.tuple3(ret)
         }
-        if (OPTION_ID in type) {
+        if (CasperSDK.OPTION_ID in type) {
             // return CLValueBuilder.option()
         }
-        if (RESULT_ID in type) {
+        if (CasperSDK.RESULT_ID in type) {
             return
         }
         throw new Error(`The complex type ${type} is not supported`);
