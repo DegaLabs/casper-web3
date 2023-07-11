@@ -6,6 +6,7 @@ const fs = require('fs');
 const { TypedJSON } = require("typedjson")
 
 const { CLValueBuilder, RuntimeArgs, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, DeployUtil, Keys, matchTypeToCLType, CLValue, StoredValue } = require("casper-js-sdk");
+const { Some } = require('ts-results')
 const CasperSDK = require('casper-js-sdk')
 const { setClient } = helpers;
 const axios = require('axios');
@@ -112,7 +113,7 @@ function serializeParam(t, v) {
             return CLValueBuilder.tuple3(ret)
         }
         if (CasperSDK.OPTION_ID in type) {
-            // return CLValueBuilder.option()
+            return CLValueBuilder.option(Some())
         }
         if (CasperSDK.RESULT_ID in type) {
             return
@@ -328,10 +329,10 @@ const Contract = class {
         const namedKeys = this.namedKeys
         for (const _nk of this.namedKeysList) {
             const nk = camelCased(_nk)
-            this.getter[`${nk}`] = async function (itemKey, isRaw) {
+            this.getter[`${nk}`] = async function (itemKey, isRaw, stateRootHash) {
                 try {
                     const uref = namedKeys[nk]
-                    const stateRootHash = await getStateRootHash(chainName)
+                    stateRootHash = stateRootHash ? stateRootHash : await getStateRootHash(chainName)
                     let stateOfNK = await axios.get(`https://event-store-api-clarity-${getNetwork(chainName)}.make.services/rpc/state_get_item?state_root_hash=${stateRootHash}&key=${uref}`)
                     stateOfNK = stateOfNK.data.result.stored_value.CLValue
                     if (stateOfNK) {
