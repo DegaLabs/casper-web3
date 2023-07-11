@@ -40,33 +40,33 @@ const camelCased = (myString) => myString.replace(/_([a-z])/g, (g) => g[1].toUpp
  */
 function serializeParam(t, v) {
     switch (t) {
-        case CasperSDK.BOOL_ID:
+        case CasperSDK.BOOL_TYPE:
             return CLValueBuilder.bool(v)
-        case CasperSDK.KEY_ID:
+        case CasperSDK.KEY_TYPE:
             return CLValueBuilder.key(v)
-        case CasperSDK.PUBLIC_KEY_ID:
+        case CasperSDK.PUBLIC_KEY_TYPE:
             return CasperSDK.CLPublicKey.fromHex(v)
-        case CasperSDK.STRING_ID:
+        case CasperSDK.STRING_TYPE:
             return CLValueBuilder.string(v)
-        case CasperSDK.UREF_ID:
+        case CasperSDK.UREF_TYPE:
             return CLValueBuilder.uref(v, CasperSDK.AccessRights.None)
-        case CasperSDK.UNIT_ID:
+        case CasperSDK.UNIT_TYPE:
             return CLValueBuilder.unit()
-        case CasperSDK.I32_ID:
+        case CasperSDK.I32_TYPE:
             return CLValueBuilder.i32(v)
-        case CasperSDK.I64_ID:
+        case CasperSDK.I64_TYPE:
             return CLValueBuilder.i64(v)
-        case CasperSDK.U8_ID:
+        case CasperSDK.U8_TYPE:
             return CLValueBuilder.u8(v)
-        case CasperSDK.U32_ID:
+        case CasperSDK.U32_TYPE:
             return CLValueBuilder.u32(v)
-        case CasperSDK.U64_ID:
+        case CasperSDK.U64_TYPE:
             return CLValueBuilder.u64(v)
-        case CasperSDK.U128_ID:
+        case CasperSDK.U128_TYPE:
             return CLValueBuilder.u128(v)
-        case CasperSDK.U256_ID:
+        case CasperSDK.U256_TYPE:
             return CLValueBuilder.u256(v)
-        case CasperSDK.U512_ID:
+        case CasperSDK.U512_TYPE:
             return CLValueBuilder.u512(v)
         default:
             break;
@@ -74,48 +74,48 @@ function serializeParam(t, v) {
 
     const type = t
     if (typeof type === typeof {}) {
-        if (CasperSDK.LIST_ID in type) {
-            const inner = matchTypeToCLType(type[CasperSDK.LIST_ID]);
+        if (CasperSDK.LIST_TYPE in type) {
+            const inner = matchTypeToCLType(type[CasperSDK.LIST_TYPE]);
             return CLValueBuilder.list(v.map(e => serializeParam(inner.toString(), e)))
         }
-        if (CasperSDK.BYTE_ARRAY_ID in type) {
-            // const size = type[BYTE_ARRAY_ID];
+        if (CasperSDK.BYTE_ARRAY_TYPE in type) {
+            // const size = type[BYTE_ARRAY_TYPE];
             return CLValueBuilder.byteArray(v)
         }
-        if (CasperSDK.MAP_ID in type) {
-            const keyType = matchTypeToCLType(type[CasperSDK.MAP_ID].key);
-            const valType = matchTypeToCLType(type[CasperSDK.MAP_ID].value);
+        if (CasperSDK.MAP_TYPE in type) {
+            const keyType = matchTypeToCLType(type[CasperSDK.MAP_TYPE].key);
+            const valType = matchTypeToCLType(type[CasperSDK.MAP_TYPE].value);
             const mapItems = v.map(e => [serializeParam(keyType, e[0]), serializeParam(valType, e[1])])
             return CLValueBuilder.map(mapItems)
         }
-        if (CasperSDK.TUPLE1_ID in type) {
-            const vals = type[TUPLE1_ID].map((t) => matchTypeToCLType(t));
+        if (CasperSDK.TUPLE1_TYPE in type) {
+            const vals = type[TUPLE1_TYPE].map((t) => matchTypeToCLType(t));
             const ret = []
             for (var i = 0; i < vals.length; i++) {
                 ret.push(serializeParam(vals[i].toString(), v[i]))
             }
             return CLValueBuilder.tuple1(ret)
         }
-        if (CasperSDK.TUPLE2_ID in type) {
-            const vals = type[TUPLE2_ID].map((t) => matchTypeToCLType(t));
+        if (CasperSDK.TUPLE2_TYPE in type) {
+            const vals = type[TUPLE2_TYPE].map((t) => matchTypeToCLType(t));
             const ret = []
             for (var i = 0; i < vals.length; i++) {
                 ret.push(serializeParam(vals[i].toString(), v[i]))
             }
             return CLValueBuilder.tuple2(ret)
         }
-        if (CasperSDK.TUPLE3_ID in type) {
-            const vals = type[TUPLE3_ID].map((t) => matchTypeToCLType(t));
+        if (CasperSDK.TUPLE3_TYPE in type) {
+            const vals = type[TUPLE3_TYPE].map((t) => matchTypeToCLType(t));
             const ret = []
             for (var i = 0; i < vals.length; i++) {
                 ret.push(serializeParam(vals[i].toString(), v[i]))
             }
             return CLValueBuilder.tuple3(ret)
         }
-        if (CasperSDK.OPTION_ID in type) {
+        if (CasperSDK.OPTION_TYPE in type) {
             return CLValueBuilder.option(Some())
         }
-        if (CasperSDK.RESULT_ID in type) {
+        if (CasperSDK.RESULT_TYPE in type) {
             return
         }
         throw new Error(`The complex type ${type} is not supported`);
@@ -131,33 +131,33 @@ function serializeParam(t, v) {
  */
 function createInstanceFromTypeName(t) {
     switch (t) {
-        case CasperSDK.BOOL_ID:
+        case CasperSDK.BOOL_TYPE:
             return new CasperSDK.CLBoolType()
-        case CasperSDK.KEY_ID:
+        case CasperSDK.KEY_TYPE:
             return new CasperSDK.CLKeyType()
-        case CasperSDK.PUBLIC_KEY_ID:
+        case CasperSDK.PUBLIC_KEY_TYPE:
             return new CasperSDK.CLPublicKeyType()
-        case CasperSDK.STRING_ID:
+        case CasperSDK.STRING_TYPE:
             return new CasperSDK.CLStringType()
-        case CasperSDK.UREF_ID:
+        case CasperSDK.UREF_TYPE:
             return new CasperSDK.CLURefType()
-        case CasperSDK.UNIT_ID:
+        case CasperSDK.UNIT_TYPE:
             return new CasperSDK.CLUnitType()
-        case CasperSDK.I32_ID:
+        case CasperSDK.I32_TYPE:
             return new CasperSDK.CLI32Type()
-        case CasperSDK.I64_ID:
+        case CasperSDK.I64_TYPE:
             return new CasperSDK.CLI64Type()
-        case CasperSDK.U8_ID:
+        case CasperSDK.U8_TYPE:
             return new CasperSDK.CLU8Type()
-        case CasperSDK.U32_ID:
+        case CasperSDK.U32_TYPE:
             return new CasperSDK.CLU32Type()
-        case CasperSDK.U64_ID:
+        case CasperSDK.U64_TYPE:
             return new CasperSDK.CLU64Type()
-        case CasperSDK.U128_ID:
+        case CasperSDK.U128_TYPE:
             return new CasperSDK.CLU128Type()
-        case CasperSDK.U256_ID:
+        case CasperSDK.U256_TYPE:
             return new CasperSDK.CLU256Type()
-        case CasperSDK.U512_ID:
+        case CasperSDK.U512_TYPE:
             return new CasperSDK.CLU512Type()
         default:
             break;
@@ -180,46 +180,46 @@ function createInstanceFromTypeName(t) {
 function deserializeParam(t, v) {
     let ret
     switch (t) {
-        case CasperSDK.BOOL_ID:
+        case CasperSDK.BOOL_TYPE:
             ret = new CasperSDK.CLBoolBytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.KEY_ID:
+        case CasperSDK.KEY_TYPE:
             ret = new CasperSDK.CLKeyBytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.PUBLIC_KEY_ID:
+        case CasperSDK.PUBLIC_KEY_TYPE:
             ret = new CasperSDK.CLPublicKeyBytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.STRING_ID:
+        case CasperSDK.STRING_TYPE:
             ret = new CasperSDK.CLStringBytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.UREF_ID:
+        case CasperSDK.UREF_TYPE:
             ret = new CasperSDK.CLURefBytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.UNIT_ID:
+        case CasperSDK.UNIT_TYPE:
             ret = new CasperSDK.CLUnitBytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.I32_ID:
+        case CasperSDK.I32_TYPE:
             ret = new CasperSDK.CLI32BytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.I64_ID:
+        case CasperSDK.I64_TYPE:
             ret = new CasperSDK.CLI64BytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U8_ID:
+        case CasperSDK.U8_TYPE:
             ret = new CasperSDK.CLU8BytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U32_ID:
+        case CasperSDK.U32_TYPE:
             ret = new CasperSDK.CLU32BytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U64_ID:
+        case CasperSDK.U64_TYPE:
             ret = new CasperSDK.CLU64BytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U128_ID:
+        case CasperSDK.U128_TYPE:
             ret = new CasperSDK.CLU128BytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U256_ID:
+        case CasperSDK.U256_TYPE:
             ret = new CasperSDK.CLU256BytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U512_ID:
+        case CasperSDK.U512_TYPE:
             ret = new CasperSDK.CLU512BytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
         default:
@@ -227,35 +227,35 @@ function deserializeParam(t, v) {
     }
     const type = t
     if (typeof type === typeof {}) {
-        if (CasperSDK.LIST_ID in type) {
-            const inner = matchTypeToCLType(type[CasperSDK.LIST_ID]);
+        if (CasperSDK.LIST_TYPE in type) {
+            const inner = matchTypeToCLType(type[CasperSDK.LIST_TYPE]);
             ret = new CasperSDK.CLListBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLListType(createInstanceFromTypeName(inner.toString())))
             return { remainder: ret.remainder, value: ret.result.val.value() }
         }
-        if (CasperSDK.BYTE_ARRAY_ID in type) {
+        if (CasperSDK.BYTE_ARRAY_TYPE in type) {
             return
             // ret = new CasperSDK.CLByteArrayBytesParser().fromBytesWithRemainder(v)
             // return CLValueBuilder.byteArray(v)
         }
-        if (CasperSDK.MAP_ID in type) {
-            const keyType = matchTypeToCLType(type[CasperSDK.MAP_ID].key);
-            const valType = matchTypeToCLType(type[CasperSDK.MAP_ID].value);
+        if (CasperSDK.MAP_TYPE in type) {
+            const keyType = matchTypeToCLType(type[CasperSDK.MAP_TYPE].key);
+            const valType = matchTypeToCLType(type[CasperSDK.MAP_TYPE].value);
             ret = new CasperSDK.CLMapBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLMapType([createInstanceFromTypeName(keyType.toString()), createInstanceFromTypeName(valType.toString())]))
             return { remainder: ret.remainder, value: ret.result.val.value() }
         }
-        if (CasperSDK.TUPLE1_ID in type) {
+        if (CasperSDK.TUPLE1_TYPE in type) {
             return
         }
-        if (CasperSDK.TUPLE2_ID in type) {
+        if (CasperSDK.TUPLE2_TYPE in type) {
             return
         }
-        if (CasperSDK.TUPLE3_ID in type) {
+        if (CasperSDK.TUPLE3_TYPE in type) {
             return
         }
-        if (CasperSDK.OPTION_ID in type) {
+        if (CasperSDK.OPTION_TYPE in type) {
             return
         }
-        if (CasperSDK.RESULT_ID in type) {
+        if (CasperSDK.RESULT_TYPE in type) {
             return
         }
         throw new Error(`The complex type ${type} is not supported`);
