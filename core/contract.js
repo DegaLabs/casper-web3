@@ -772,6 +772,20 @@ const Contract = class {
         return ret
     }
 
+    static decodeDataWithRemainder(data, types) {
+        if (typeof data == 'string') {
+            data = Uint8Array.from(Buffer.from(data, 'hex'))
+        }
+        let remainder = data
+        const ret = []
+        for (var t of types) {
+            let { remainder: r, value: v } = deserializeParam(t, remainder)
+            remainder = r
+            ret.push(v)
+        }
+        return { remainder, values: ret }
+    }
+
     static deployToJson(d) {
         return DeployUtil.deployToJson(d)
     }
