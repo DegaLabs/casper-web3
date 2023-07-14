@@ -1,6 +1,3 @@
-const {
-    helpers
-} = require("casper-js-client-helper");
 const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 const fs = require('fs');
 const { TypedJSON } = require("typedjson")
@@ -8,9 +5,47 @@ const { TypedJSON } = require("typedjson")
 const { CLValueBuilder, RuntimeArgs, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, DeployUtil, Keys, matchTypeToCLType, CLValue, StoredValue } = require("casper-js-sdk");
 const { Some } = require('ts-results')
 const CasperSDK = require('casper-js-sdk')
-const { setClient } = helpers;
 const axios = require('axios');
-const { DEFAULT_TTL } = require("casper-js-client-helper/dist/constants");
+const DEFAULT_TTL = 1800000
+
+const getContractData = async (
+    nodeAddress,
+    stateRootHash,
+    contractHash,
+    path = [],
+) => {
+    const client = new CasperServiceByJsonRPC(nodeAddress);
+    const blockState = await client.getBlockState(
+        stateRootHash,
+        `hash-${contractHash}`,
+        path
+    );
+    return blockState;
+};
+
+async function setClient(nodeAddress, contractHash, listOfNamedKeys = []) {
+    const client = new CasperServiceByJsonRPC(nodeAddress)
+    const stateRootHash = await client.getStateRootHash()
+    const contractData = await getContractData(
+        nodeAddress,
+        stateRootHash,
+        contractHash,
+    )
+
+    const { contractPackageHash, namedKeys } = contractData.Contract
+
+    const namedKeysParsed = namedKeys.reduce((acc, val) => {
+        if (listOfNamedKeys.includes(val.name)) {
+            return { ...acc, [utils.camelCased(val.name)]: val.key }
+        }
+        return acc
+    }, {})
+
+    return {
+        contractPackageHash,
+        namedKeys: namedKeysParsed,
+    }
+}
 
 function getNetwork(networkName) {
     return networkName == 'casper' ? 'mainnet' : (networkName == 'casper-test' ? 'testnet' : 'intnet')
@@ -386,7 +421,7 @@ const Contract = class {
                             } else {
                                 storedValueJson = res.stored_value;
                             }
-                            
+
                             if (isRaw) {
                                 const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
                                 return rawBytes
@@ -466,7 +501,7 @@ const Contract = class {
 
                         argMap[`${argInEp.name}`] = serializeParam(argInEp.cl_type, argValue)
                     }
-                    
+
                     const client = new CasperClient(nodeAddress)
                     const contractHashAsByteArray = contractHashToByteArray(contractHash)
                     const dependenciesBytes = [].map((d) =>
@@ -477,16 +512,16 @@ const Contract = class {
 
                     let deploy = DeployUtil.makeDeploy(
                         new DeployUtil.DeployParams(
-                          keys.publicKey,
-                          chainName,
-                          1,
-                          ttl,
-                          dependenciesBytes,
+                            keys.publicKey,
+                            chainName,
+                            1,
+                            ttl,
+                            dependenciesBytes,
                         ),
                         DeployUtil.ExecutableDeployItem.newStoredContractByHash(
-                          contractHashAsByteArray,
-                          ep.name,
-                          RuntimeArgs.fromMap(argMap)
+                            contractHashAsByteArray,
+                            ep.name,
+                            RuntimeArgs.fromMap(argMap)
                         ),
                         DeployUtil.standardPayment(paymentAmount),
                     )
