@@ -36,7 +36,7 @@ async function setClient(nodeAddress, contractHash, listOfNamedKeys = []) {
 
     const namedKeysParsed = namedKeys.reduce((acc, val) => {
         if (listOfNamedKeys.includes(val.name)) {
-            return { ...acc, [utils.camelCased(val.name)]: val.key }
+            return { ...acc, [camelCased(val.name)]: val.key }
         }
         return acc
     }, {})
