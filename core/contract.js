@@ -760,9 +760,26 @@ const Contract = class {
         const client = new CasperClient(nodeAddress);
         const signedDeploy = client.signDeploy(deploy, keys)
         const hash = await client.putDeploy(signedDeploy);
-
         return hash
     }
+
+    /**
+ * This function make unsigned deploy of install a smart contract on a specified blockchain network and returns the
+ * unsigned deploy .
+ * @returns the unsigned deploy of the install contract.
+ */
+    static async makeUnsignedInstallContract({ keys, args, paymentAmount, chainName, nodeAddress, wasmPath }) {
+        const runtimeArgs = RuntimeArgs.fromMap(args);
+        const wasmCodeFile = fs.readFileSync(wasmPath, null).buffer;
+        const session = DeployUtil.ExecutableDeployItem.newModuleBytes(
+            new Uint8Array(wasmCodeFile),
+            runtimeArgs
+        );
+        const deployParams = new DeployUtil.DeployParams(CasperSDK.CLPublicKey.fromHex(keys.publicKey.toHex()), chainName)
+        const payment = DeployUtil.standardPayment(paymentAmount);
+        return DeployUtil.makeDeploy(deployParams, session, payment)
+    }
+
 
     static async putSignatureAndSend(
         publicKey,
