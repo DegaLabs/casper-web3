@@ -2,11 +2,16 @@ const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 const fs = require('fs');
 const { TypedJSON } = require("typedjson")
 
-const { CLValueBuilder, RuntimeArgs, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, DeployUtil, Keys, matchTypeToCLType, CLValue, StoredValue } = require("casper-js-sdk");
+const { CLValueBuilder, RuntimeArgs, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, Keys, matchTypeToCLType, CLValue, StoredValue } = require("casper-js-sdk");
 const { Some } = require('ts-results')
 const CasperSDK = require('casper-js-sdk')
 const axios = require('axios');
 const DEFAULT_TTL = 1800000
+
+function createRpcClient(rpc) {
+    const rpcHandler = new CasperSDK.HttpHandler(rpc);
+    return new CasperSDK.RpcClient(rpcHandler);
+}
 
 const getContractData = async (
     nodeAddress,
@@ -51,14 +56,10 @@ function getNetwork(networkName) {
     return networkName == 'casper' ? 'mainnet' : (networkName == 'casper-test' ? 'testnet' : 'intnet')
 }
 
-function getAPIToGetABI(networkName) {
-    return `https://event-store-api-clarity-${getNetwork(networkName)}.make.services/rpc/state_get_item`
-}
-
-async function getStateRootHash(networkName) {
-    const url = `https://event-store-api-clarity-${getNetwork(networkName)}.make.services/rpc/info_get_status`
-    const data = await axios.get(url)
-    return data.data.result.last_added_block_info.state_root_hash
+async function getStateRootHash(rpc) {
+    const rpcClient = createRpcClient(rpc)
+    const strh = await rpcClient.getStateRootHashLatest()
+    return strh.stateRootHash.toHex()
 }
 
 const contractHashToByteArray = (contractHash) => Uint8Array.from(Buffer.from(contractHash, "hex"));
@@ -75,34 +76,34 @@ const camelCased = (myString) => myString.replace(/_([a-z])/g, (g) => g[1].toUpp
  */
 function serializeParam(t, v) {
     switch (t) {
-        case CasperSDK.BOOL_TYPE:
-            return CLValueBuilder.bool(v)
-        case CasperSDK.KEY_TYPE:
-            return CLValueBuilder.key(v)
-        case CasperSDK.PUBLIC_KEY_TYPE:
-            return CasperSDK.CLPublicKey.fromHex(v)
-        case CasperSDK.STRING_TYPE:
-            return CLValueBuilder.string(v)
-        case CasperSDK.UREF_TYPE:
-            return CLValueBuilder.uref(v, CasperSDK.AccessRights.None)
-        case CasperSDK.UNIT_TYPE:
-            return CLValueBuilder.unit()
-        case CasperSDK.I32_TYPE:
-            return CLValueBuilder.i32(v)
-        case CasperSDK.I64_TYPE:
-            return CLValueBuilder.i64(v)
-        case CasperSDK.U8_TYPE:
-            return CLValueBuilder.u8(v)
-        case CasperSDK.U32_TYPE:
-            return CLValueBuilder.u32(v)
-        case CasperSDK.U64_TYPE:
-            return CLValueBuilder.u64(v)
-        case CasperSDK.U128_TYPE:
-            return CLValueBuilder.u128(v)
-        case CasperSDK.U256_TYPE:
-            return CLValueBuilder.u256(v)
-        case CasperSDK.U512_TYPE:
-            return CLValueBuilder.u512(v)
+        case CasperSDK.CLTypeBool.getTypeID():
+            return CasperSDK.CLValue.newCLValueBool(v)
+        case CasperSDK.CLTypeKey.getTypeID():
+            return CasperSDK.CLValue.newCLKey(v)
+        case CasperSDK.CLTypePublicKey.getTypeID():
+            return CasperSDK.CLValue.newCLPublicKey(CasperSDK.PublicKey.fromHex(v))
+        case CasperSDK.CLTypeString.getTypeID():
+            return CasperSDK.CLValue.newCLString(v)
+        case CasperSDK.CLTypeUref.getTypeID():
+            return CasperSDK.CLValue.newCLUref(v)
+        case CasperSDK.CLTypeUnit.getTypeID():
+            return CasperSDK.CLValue.newCLUnit()
+        case CasperSDK.CLTypeInt32.getTypeID():
+            return CasperSDK.CLValue.newCLInt32(v)
+        case CasperSDK.CLTypeInt64.getTypeID():
+            return CasperSDK.CLValue.newCLInt64(v)
+        case CasperSDK.CLTypeUInt8.getTypeID():
+            return CasperSDK.CLValue.newCLUint8(v)
+        case CasperSDK.CLTypeUInt32.getTypeID():
+            return CasperSDK.CLValue.newCLUInt32(v)
+        case CasperSDK.CLTypeUInt64.getTypeID():
+            return CasperSDK.CLValue.newCLUint64(v)
+        case CasperSDK.CLTypeUInt128.getTypeID():
+            return CasperSDK.CLValue.newCLUInt128(v)
+        case CasperSDK.CLTypeUInt256.getTypeID():
+            return CasperSDK.CLValue.newCLUInt256(v)
+        case CasperSDK.CLTypeUInt512.getTypeID():
+            return CasperSDK.CLValue.newCLUInt512(v)
         default:
             break;
     }
@@ -215,7 +216,7 @@ function createInstanceFromTypeName(t) {
 function deserializeParam(t, v) {
     let ret
     switch (t) {
-        case CasperSDK.BOOL_TYPE:
+        case CasperSDK.CLTypeBool.getTypeID():
             ret = new CasperSDK.CLBoolBytesParser().fromBytesWithRemainder(v)
             return { remainder: ret.remainder, value: ret.result.val.value() }
         case CasperSDK.KEY_TYPE:
@@ -321,14 +322,16 @@ const Contract = class {
      * contract to interact with it. It is defined in the smart contract code and can have parameters
      * and return values. By providing a list of
      */
-    constructor(contractHash, nodeAddress, chainName, namedKeysList = [], entryPoints = []) {
+    constructor(contractPackageHash, contractHash, nodeAddress, chainName, namedKeys = [], entryPoints = []) {
         this.contractHash = contractHash.startsWith("hash-")
             ? contractHash.slice(5)
             : contractHash;
+        this.contractPackageHash = contractPackageHash.startsWith("hash-") ? contractPackageHash.slice(5) : contractPackageHash;
         this.nodeAddress = nodeAddress;
         this.chainName = chainName;
-        this.namedKeysList = namedKeysList
-        this.entryPoints = entryPoints
+        this.namedKeys = namedKeys
+        this.namedKeysList = namedKeys.map(e => e.name)
+        this.entryPoints = entryPoints.map(e => e.entryPoint)
     }
 
     /**
@@ -336,14 +339,6 @@ const Contract = class {
      * interacting with a smart contract on a blockchain network.
      */
     async init() {
-        const { contractPackageHash, namedKeys } = await setClient(
-            this.nodeAddress,
-            this.contractHash,
-            this.namedKeysList
-        );
-        this.contractPackageHash = contractPackageHash;
-        this.namedKeys = namedKeys;
-
         this.getter = {}
         this.contractCalls = {}
 
@@ -359,19 +354,19 @@ const Contract = class {
      */
     async createGetterFunctions() {
         const nodeAddress = this.nodeAddress
-        const contractHash = this.contractHash
-        const chainName = this.chainName
         const namedKeys = this.namedKeys
         for (const _nk of this.namedKeysList) {
             const nk = camelCased(_nk)
             this.getter[`${nk}`] = async function (itemKey, isRaw, stateRootHash) {
                 try {
-                    const uref = namedKeys[nk]
-                    stateRootHash = stateRootHash ? stateRootHash : await getStateRootHash(chainName)
-                    let stateOfNK = await axios.get(`https://event-store-api-clarity-${getNetwork(chainName)}.make.services/rpc/state_get_item?state_root_hash=${stateRootHash}&key=${uref}`)
-                    stateOfNK = stateOfNK.data.result.stored_value.CLValue
+                    const rpcClient = createRpcClient(nodeAddress)
+                    const namedKey = namedKeys.find(e => e.name == _nk)
+                    const uref = namedKey.key.uRef.toString()
+                    let stateOfNK = await rpcClient.getStateItem(null, `uref-${uref}`, [])
+                    stateOfNK = stateOfNK.storedValue.clValue
+                    console.log('stateOfNK', stateOfNK)
                     if (stateOfNK) {
-                        if (stateOfNK.cl_type == 'Unit') {
+                        if (stateOfNK.type.typeName == 'Unit') {
                             const transport = new HTTPTransport(nodeAddress);
                             const client = new Client(new RequestManager([transport]));
                             const res = await client.request({
@@ -405,35 +400,7 @@ const Contract = class {
                                 }
                             }
                         } else {
-                            const transport = new HTTPTransport(nodeAddress);
-                            const client = new Client(new RequestManager([transport]));
-                            const res = await client.request({
-                                method: 'state_get_item',
-                                params: {
-                                    state_root_hash: stateRootHash,
-                                    key: "hash-" + contractHash,
-                                    path: [_nk]
-                                }
-                            });
-                            let storedValueJson;
-                            if (res.error) {
-                                throw new Error("Cannot read raw data")
-                            } else {
-                                storedValueJson = res.stored_value;
-                            }
-
-                            if (isRaw) {
-                                const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
-                                return rawBytes
-                            } else {
-                                const serializer = new TypedJSON(StoredValue);
-                                const storedValue = serializer.parse(storedValueJson)
-                                if (storedValue && storedValue.CLValue instanceof CLValue) {
-                                    return storedValue.CLValue.value();
-                                } else {
-                                    throw Error("Invalid stored value");
-                                }
-                            }
+                            return stateOfNK
                         }
                     }
                     return null
@@ -457,6 +424,9 @@ const Contract = class {
         const entryPoints = this.entryPoints
         for (const ep of entryPoints) {
             const epName = camelCased(ep.name)
+            if (epName == 'transfer') {
+                console.log(ep.args)
+            }
             this.contractCalls[`${epName}`] = {
                 makeUnsignedDeploy: async function ({ publicKey, args = {}, paymentAmount, ttl = DEFAULT_TTL }) {
                     const argNames = Object.keys(args)
@@ -468,24 +438,27 @@ const Contract = class {
                             throw new Error('Invalid argument ' + argName)
                         }
 
-                        argMap[`${argInEp.name}`] = serializeParam(argInEp.cl_type, argValue)
+                        argMap[`${argInEp.name}`] = serializeParam(argInEp.typeID, argValue)
                     }
                     const contractHashAsByteArray = contractHashToByteArray(contractHash)
 
-                    return CasperSDK.DeployUtil.makeDeploy(
-                        new CasperSDK.DeployUtil.DeployParams(
-                            publicKey,
-                            chainName,
-                            1,
-                            ttl,
-                            [],
-                        ),
-                        CasperSDK.DeployUtil.ExecutableDeployItem.newStoredContractByHash(
+                    const deployHeader = CasperSDK.DeployHeader.default()
+                    deployHeader.account = publicKey
+                    deployHeader.chainName = 'casper'
+                    deployHeader.ttl = ttl
+                    const executableItem = new CasperSDK.ExecutableDeployItem()
+                    executableItem.storedContractByHash = new CasperSDK.StoredContractByHash(
+                        new CasperSDK.ContractHash(CasperSDK.Hash.fromHex(contractHash), ''),
+                        ep.name,
+                    )
+                    return CasperSDK.Deploy.makeDeploy(
+                        deployHeader,
+                        CasperSDK.ExecutableDeployItem.newStoredContractByHash(
                             contractHashAsByteArray,
                             ep.name,
-                            RuntimeArgs.fromMap(argMap),
+                            CasperSDK.Args.fromMap(argMap),
                         ),
-                        CasperSDK.DeployUtil.standardPayment(paymentAmount),
+                        CasperSDK.ExecutableDeployItem.standardPayment(paymentAmount),
                     )
                 },
                 makeDeployAndSend: async function ({ keys, args = {}, paymentAmount, ttl = DEFAULT_TTL }) {
@@ -498,7 +471,7 @@ const Contract = class {
                             throw new Error('Invalid argument ' + argName)
                         }
 
-                        argMap[`${argInEp.name}`] = serializeParam(argInEp.cl_type, argValue)
+                        argMap[`${argInEp.name}`] = serializeParam(argInEp.typeID, argValue)
                     }
 
                     const client = new CasperClient(nodeAddress)
@@ -671,9 +644,8 @@ const Contract = class {
      * @returns The function `createInstance` returns a Promise that resolves to an instance of the
      * `Contract` class.
      */
-    static async createInstance(contractHash, nodeAddress, chainName, abi) {
-        const namedKeysList = (abi.named_keys ? abi.named_keys : []).map(e => e.name)
-        const instance = new Contract(contractHash, nodeAddress, chainName, namedKeysList, abi.entry_points ? abi.entry_points : []);
+    static async createInstance(contractPackageHash, contractHash, nodeAddress, chainName, abi) {
+        const instance = new Contract(contractPackageHash, contractHash, nodeAddress, chainName, abi.namedKeys ?? [], abi.entryPoints ?? []);
         await instance.init();
         return instance;
     }
@@ -691,11 +663,10 @@ const Contract = class {
      * contract hash, node address, chain name, and ABI.
      */
     static async createInstanceWithRemoteABI(contractHash, nodeAddress, chainName) {
-        const apiToGetABI = getAPIToGetABI(chainName)
-        const stateRootHash = await getStateRootHash(chainName)
-        const data = await axios.get(`${apiToGetABI}?state_root_hash=${stateRootHash}&key=hash-${contractHash}`)
-        const ABI = data.data.result.stored_value.Contract
-        return await Contract.createInstance(contractHash, nodeAddress, chainName, ABI)
+        const rpcClient = createRpcClient(nodeAddress)
+        const state = await rpcClient.queryGlobalStateByStateHash(null, `hash-${contractHash}`, [])
+        const ABI = state.storedValue.contract
+        return await Contract.createInstance(state.storedValue.contract.contractPackageHash.hash.toHex(), contractHash, nodeAddress, chainName, ABI)
     }
 
     /**
@@ -710,10 +681,11 @@ const Contract = class {
      * @returns the information of a contract package identified by its hash, including its ABI
      * (Application Binary Interface) and other metadata.
      */
-    static async getPackageInfo(contractPackageHash, chainName) {
-        const stateRootHash = await getStateRootHash(chainName)
-        const data = await axios.get(`${getAPIToGetABI(chainName)}?state_root_hash=${stateRootHash}&key=hash-${contractPackageHash}`)
-        const packageInfo = data.data.result.stored_value.ContractPackage
+    static async getPackageInfo(contractPackageHash, nodeAddress) {
+        const stateRootHash = await getStateRootHash(nodeAddress)
+        const rpcClient = createRpcClient(nodeAddress)
+        const state = await rpcClient.queryGlobalStateByStateHash(stateRootHash, `hash-${contractPackageHash}`, [])
+        const packageInfo = state.storedValue.contractPackage
         return packageInfo
     }
 
@@ -728,16 +700,16 @@ const Contract = class {
      * @returns the hash of the latest active contract version for a given contract package hash and
      * chain name.
      */
-    static async getActiveContractHash(contractPackageHash, chainName) {
-        const packageInfo = await Contract.getPackageInfo(contractPackageHash, chainName)
+    static async getActiveContractHash(contractPackageHash, nodeAddress) {
+        const packageInfo = await Contract.getPackageInfo(contractPackageHash, nodeAddress)
         const versions = packageInfo.versions
         let lastVersion = {};
         versions.forEach(e => {
-            if (!lastVersion.contract_version || e.contract_version > lastVersion.contract_version) {
+            if (!lastVersion.contractVersion || e.contractVersion > lastVersion.contractVersion) {
                 lastVersion = e
             }
         })
-        return lastVersion.contract_hash.substring("contract-".length)
+        return lastVersion.contractHash.hash.toHex()
     }
 
     /**
@@ -786,19 +758,21 @@ const Contract = class {
         signature,
         nodeAddress,
     ) {
-        const client = new CasperClient(nodeAddress)
-        const approval = new DeployUtil.Approval()
-        approval.signer = publicKey.toHex()
-        if (publicKey.isEd25519()) {
-            approval.signature = Keys.Ed25519.accountHex(signature)
-        } else {
-            approval.signature = Keys.Secp256K1.accountHex(signature)
-        }
-
+        const client = createRpcClient(nodeAddress)
+        // if (publicKey.cryptoAlg == CasperSDK.KeyAlgorithm.ED25519) {
+        //     signature = CasperSDK.
+        // }
+        const approval = new CasperSDK.Approval(publicKey, signature)
+        // approval.signer = publicKey.toHex()
+        // if (publicKey.isEd25519()) {
+        //     approval.signature = Keys.Ed25519.accountHex(signature)
+        // } else {
+        //     approval.signature = Keys.Secp256K1.accountHex(signature)
+        // }
         deploy.approvals.push(approval)
 
         const deployHash = await client.putDeploy(deploy)
-        return deployHash
+        return deployHash.deployHash.toHex()
     }
 
     /**
@@ -838,11 +812,11 @@ const Contract = class {
     }
 
     static deployToJson(d) {
-        return DeployUtil.deployToJson(d)
+        return CasperSDK.Deploy.toJSON(d)
     }
 
     static deployFromJson(d) {
-        return DeployUtil.deployFromJson(d)
+        return CasperSDK.Deploy.fromJSON(d)
     }
 }
 
