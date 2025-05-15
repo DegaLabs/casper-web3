@@ -470,7 +470,6 @@ const Contract = class {
 
                         argMap[`${argInEp.name}`] = serializeParam(argInEp.cl_type, argValue)
                     }
-
                     const contractHashAsByteArray = contractHashToByteArray(contractHash)
 
                     return CasperSDK.DeployUtil.makeDeploy(
