@@ -512,7 +512,6 @@ const Contract = class {
                         const clValueMap = clValue.map
                         const hash = clValueMap.get("contract_package_hash");
                         const event = clValueMap.get("event_type");
-                        console.log({ hash, event, contractPackageHash })
                         if (
                             hash &&
                             (hash?.stringVal?.value === contractPackageHash) &&
