@@ -1,8 +1,6 @@
-const { RequestManager, HTTPTransport, Client } = require("@open-rpc/client-js")
 const fs = require('fs');
-const { TypedJSON } = require("typedjson")
 
-const { CLValueBuilder, RuntimeArgs, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, Keys, matchTypeToCLType, CLValue, StoredValue } = require("casper-js-sdk");
+const { CLValueBuilder, RuntimeArgs, CasperClient, matchTypeToCLType } = require("casper-js-sdk");
 const { Some } = require('ts-results')
 const CasperSDK = require('casper-js-sdk')
 const DEFAULT_TTL = 1800000
@@ -12,26 +10,7 @@ function createRpcClient(rpc) {
     return new CasperSDK.RpcClient(rpcHandler);
 }
 
-const getContractData = async (
-    nodeAddress,
-    stateRootHash,
-    contractHash,
-    path = [],
-) => {
-    const client = new CasperServiceByJsonRPC(nodeAddress);
-    const blockState = await client.getBlockState(
-        stateRootHash,
-        `hash-${contractHash}`,
-        path
-    );
-    return blockState;
-};
 
-async function getStateRootHash(rpc) {
-    const rpcClient = createRpcClient(rpc)
-    const strh = await rpcClient.getStateRootHashLatest()
-    return strh.stateRootHash.toHex()
-}
 
 const contractHashToByteArray = (contractHash) => Uint8Array.from(Buffer.from(contractHash, "hex"));
 const camelCased = (myString) => myString.replace(/_([a-z])/g, (g) => g[1].toUpperCase())
@@ -129,47 +108,6 @@ function serializeParam(t, v) {
     }
 }
 
-/**
- * The function creates an instance of a specific type based on the input type name.
- * @param t - The parameter `t` is a string representing the type name of a Casper contract type.
- * @returns The function `createInstanceFromTypeName` returns an instance of a class based on the input
- * `t`, which is a string representing the type name. The specific class instance returned depends on
- * the value of `t` and is determined by the switch statement.
- */
-function createInstanceFromTypeName(t) {
-    switch (t) {
-        case CasperSDK.BOOL_TYPE:
-            return new CasperSDK.CLBoolType()
-        case CasperSDK.KEY_TYPE:
-            return new CasperSDK.CLKeyType()
-        case CasperSDK.PUBLIC_KEY_TYPE:
-            return new CasperSDK.CLPublicKeyType()
-        case CasperSDK.STRING_TYPE:
-            return new CasperSDK.CLStringType()
-        case CasperSDK.UREF_TYPE:
-            return new CasperSDK.CLURefType()
-        case CasperSDK.UNIT_TYPE:
-            return new CasperSDK.CLUnitType()
-        case CasperSDK.I32_TYPE:
-            return new CasperSDK.CLI32Type()
-        case CasperSDK.I64_TYPE:
-            return new CasperSDK.CLI64Type()
-        case CasperSDK.U8_TYPE:
-            return new CasperSDK.CLU8Type()
-        case CasperSDK.U32_TYPE:
-            return new CasperSDK.CLU32Type()
-        case CasperSDK.U64_TYPE:
-            return new CasperSDK.CLU64Type()
-        case CasperSDK.U128_TYPE:
-            return new CasperSDK.CLU128Type()
-        case CasperSDK.U256_TYPE:
-            return new CasperSDK.CLU256Type()
-        case CasperSDK.U512_TYPE:
-            return new CasperSDK.CLU512Type()
-        default:
-            break;
-    }
-}
 
 /**
  * This function deserializes a parameter based on its type using various parsers in the CasperSDK
@@ -184,89 +122,9 @@ function createInstanceFromTypeName(t) {
  * value. The specific values and types of these properties depend on the input type (specified by the
  * "t" parameter) and the input value (specified by the "v" parameter).
  */
-function deserializeParam(t, v) {
-    let ret
-    switch (t) {
-        case CasperSDK.CLTypeBool.getTypeID():
-            ret = new CasperSDK.CLBoolBytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.KEY_TYPE:
-            ret = new CasperSDK.CLKeyBytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.PUBLIC_KEY_TYPE:
-            ret = new CasperSDK.CLPublicKeyBytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.STRING_TYPE:
-            ret = new CasperSDK.CLStringBytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.UREF_TYPE:
-            ret = new CasperSDK.CLURefBytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.UNIT_TYPE:
-            ret = new CasperSDK.CLUnitBytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.I32_TYPE:
-            ret = new CasperSDK.CLI32BytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.I64_TYPE:
-            ret = new CasperSDK.CLI64BytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U8_TYPE:
-            ret = new CasperSDK.CLU8BytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U32_TYPE:
-            ret = new CasperSDK.CLU32BytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U64_TYPE:
-            ret = new CasperSDK.CLU64BytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U128_TYPE:
-            ret = new CasperSDK.CLU128BytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U256_TYPE:
-            ret = new CasperSDK.CLU256BytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        case CasperSDK.U512_TYPE:
-            ret = new CasperSDK.CLU512BytesParser().fromBytesWithRemainder(v)
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        default:
-            break;
-    }
-    const type = t
-    if (typeof type === typeof {}) {
-        if (CasperSDK.LIST_TYPE in type) {
-            const inner = matchTypeToCLType(type[CasperSDK.LIST_TYPE]);
-            ret = new CasperSDK.CLListBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLListType(createInstanceFromTypeName(inner.toString())))
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        }
-        if (CasperSDK.BYTE_ARRAY_TYPE in type) {
-            return
-            // ret = new CasperSDK.CLByteArrayBytesParser().fromBytesWithRemainder(v)
-            // return CLValueBuilder.byteArray(v)
-        }
-        if (CasperSDK.MAP_TYPE in type) {
-            const keyType = matchTypeToCLType(type[CasperSDK.MAP_TYPE].key);
-            const valType = matchTypeToCLType(type[CasperSDK.MAP_TYPE].value);
-            ret = new CasperSDK.CLMapBytesParser().fromBytesWithRemainder(v, new CasperSDK.CLMapType([createInstanceFromTypeName(keyType.toString()), createInstanceFromTypeName(valType.toString())]))
-            return { remainder: ret.remainder, value: ret.result.val.value() }
-        }
-        if (CasperSDK.TUPLE1_TYPE in type) {
-            return
-        }
-        if (CasperSDK.TUPLE2_TYPE in type) {
-            return
-        }
-        if (CasperSDK.TUPLE3_TYPE in type) {
-            return
-        }
-        if (CasperSDK.OPTION_TYPE in type) {
-            return
-        }
-        if (CasperSDK.RESULT_TYPE in type) {
-            return
-        }
-        throw new Error(`The complex type ${type} is not supported`);
-    }
+function deserializeParam(clType, v) {
+    let ret = CasperSDK.CLValueParser.fromBytesByType(v, clType)
+    return { remainder: ret.bytes, value: ret.result }
 }
 
 /* The above code defines a JavaScript class called `Contract` that provides methods for interacting
@@ -663,7 +521,7 @@ const Contract = class {
  * unsigned deploy .
  * @returns the unsigned deploy of the install contract.
  */
-    static async makeUnsignedInstallContract({ keys, args, paymentAmount, chainName, nodeAddress, wasmPath }) {
+    static async makeUnsignedInstallContract({ keys, args, paymentAmount, chainName, wasmPath }) {
         const runtimeArgs = RuntimeArgs.fromMap(args);
         const wasmCodeFile = fs.readFileSync(wasmPath, null).buffer;
         const session = DeployUtil.ExecutableDeployItem.newModuleBytes(
