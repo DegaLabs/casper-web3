@@ -5,7 +5,6 @@ const { TypedJSON } = require("typedjson")
 const { CLValueBuilder, RuntimeArgs, CLValueParsers, CLTypeTag, CasperServiceByJsonRPC, CasperClient, Keys, matchTypeToCLType, CLValue, StoredValue } = require("casper-js-sdk");
 const { Some } = require('ts-results')
 const CasperSDK = require('casper-js-sdk')
-const axios = require('axios');
 const DEFAULT_TTL = 1800000
 
 function createRpcClient(rpc) {
@@ -27,34 +26,6 @@ const getContractData = async (
     );
     return blockState;
 };
-
-async function setClient(nodeAddress, contractHash, listOfNamedKeys = []) {
-    const client = new CasperServiceByJsonRPC(nodeAddress)
-    const stateRootHash = await client.getStateRootHash()
-    const contractData = await getContractData(
-        nodeAddress,
-        stateRootHash,
-        contractHash,
-    )
-
-    const { contractPackageHash, namedKeys } = contractData.Contract
-
-    const namedKeysParsed = namedKeys.reduce((acc, val) => {
-        if (listOfNamedKeys.includes(val.name)) {
-            return { ...acc, [camelCased(val.name)]: val.key }
-        }
-        return acc
-    }, {})
-
-    return {
-        contractPackageHash,
-        namedKeys: namedKeysParsed,
-    }
-}
-
-function getNetwork(networkName) {
-    return networkName == 'casper' ? 'mainnet' : (networkName == 'casper-test' ? 'testnet' : 'intnet')
-}
 
 async function getStateRootHash(rpc) {
     const rpcClient = createRpcClient(rpc)
@@ -424,9 +395,6 @@ const Contract = class {
         const entryPoints = this.entryPoints
         for (const ep of entryPoints) {
             const epName = camelCased(ep.name)
-            if (epName == 'transfer') {
-                console.log(ep.args)
-            }
             this.contractCalls[`${epName}`] = {
                 makeUnsignedDeploy: async function ({ publicKey, args = {}, paymentAmount, ttl = DEFAULT_TTL }) {
                     const argNames = Object.keys(args)
@@ -437,28 +405,24 @@ const Contract = class {
                         if (!argInEp) {
                             throw new Error('Invalid argument ' + argName)
                         }
-
-                        argMap[`${argInEp.name}`] = serializeParam(argInEp.typeID, argValue)
+                        argMap[`${argInEp.name}`] = serializeParam(argInEp.clType.typeID, argValue)
                     }
-                    const contractHashAsByteArray = contractHashToByteArray(contractHash)
 
                     const deployHeader = CasperSDK.DeployHeader.default()
                     deployHeader.account = publicKey
                     deployHeader.chainName = 'casper'
-                    deployHeader.ttl = ttl
+                    deployHeader.ttl = new CasperSDK.Duration(ttl)
                     const executableItem = new CasperSDK.ExecutableDeployItem()
                     executableItem.storedContractByHash = new CasperSDK.StoredContractByHash(
                         new CasperSDK.ContractHash(CasperSDK.Hash.fromHex(contractHash), ''),
                         ep.name,
+                        CasperSDK.Args.fromMap(argMap),
                     )
+
                     return CasperSDK.Deploy.makeDeploy(
                         deployHeader,
-                        CasperSDK.ExecutableDeployItem.newStoredContractByHash(
-                            contractHashAsByteArray,
-                            ep.name,
-                            CasperSDK.Args.fromMap(argMap),
-                        ),
                         CasperSDK.ExecutableDeployItem.standardPayment(paymentAmount),
+                        executableItem,
                     )
                 },
                 makeDeployAndSend: async function ({ keys, args = {}, paymentAmount, ttl = DEFAULT_TTL }) {
@@ -471,7 +435,7 @@ const Contract = class {
                             throw new Error('Invalid argument ' + argName)
                         }
 
-                        argMap[`${argInEp.name}`] = serializeParam(argInEp.typeID, argValue)
+                        argMap[`${argInEp.name}`] = serializeParam(argInEp.clType.typeID, argValue)
                     }
 
                     const client = new CasperClient(nodeAddress)
@@ -517,12 +481,12 @@ const Contract = class {
      *       request_bridge_erc20: ["contract_package_hash", "event_type", "erc20_contract", "request_index"],
      *       unlock_erc20: ["contract_package_hash", "event_type", "erc20_contract", "amount", "from", "to", "unlock_id"]
      *       }
-     * @param deploy - `deploy` is an object that represents a deployment transaction on the Casper
+     * @param deployExecutionResult - `deployExecutionResult` is an object that represents a deployment transaction on the Casper
      * blockchain. It contains information about the deployed contract, such as the execution result
      * and any associated transforms. This object is used in the `parseEvents` function to extract
      * events emitted by the deployed contract.
      */
-    static parseEvents(eventSpecs, deploy, contractPackageHash) {
+    static parseEvents(eventSpecs, deployExecutionResult, contractPackageHash) {
         const eventNames = Object.keys(eventSpecs)
         for (const en of eventNames) {
             if (!eventSpecs[en].includes('contract_package_hash')) {
@@ -534,39 +498,30 @@ const Contract = class {
             }
         }
 
-        const value = deploy
-
-        if (value.execution_result.result.Success) {
-            const { transforms } =
-                value.execution_result.result.Success.effect;
+        if (!deployExecutionResult.errorMessage) {
+            const transforms = deployExecutionResult.effects
 
             const eventInstances = transforms.reduce((acc, val) => {
                 if (
-                    val.transform.hasOwnProperty("WriteCLValue") &&
-                    typeof val.transform.WriteCLValue.parsed === "object" &&
-                    val.transform.WriteCLValue.parsed !== null
+                    val?.kind?.data && val.kind.isCLValueWrite() &&
+                    typeof val.kind.data.WriteCLValue.parsed === "object" &&
+                    val.kind.data.WriteCLValue.parsed !== null
                 ) {
-                    const maybeCLValue = CLValueParsers.fromJSON(
-                        val.transform.WriteCLValue
-                    );
-                    const clValue = maybeCLValue.unwrap();
-                    if (clValue && clValue.clType().tag === CLTypeTag.Map) {
-                        const hash = (clValue).get(
-                            CLValueBuilder.string("contract_package_hash")
-                        );
-                        const event = (clValue).get(CLValueBuilder.string("event_type"));
+                    const clValue = val.kind.parseAsWriteCLValue()
+                    if (clValue && clValue.getType().getTypeID() === CasperSDK.TypeID.Map) {
+                        const clValueMap = clValue.map
+                        const hash = clValueMap.get("contract_package_hash");
+                        const event = clValueMap.get("event_type");
+                        console.log({ hash, event, contractPackageHash })
                         if (
                             hash &&
-                            (hash.data === contractPackageHash) &&
+                            (hash?.stringVal?.value === contractPackageHash) &&
                             event &&
-                            eventNames.includes(event.data)
+                            eventNames.includes(event?.stringVal?.value)
                         ) {
-                            const data = {}
-                            for (const c of clValue.data) {
-                                data[c[0].data] = c[1].data
-                            }
+                            const data = clValueMap.getMap()
                             // check whether data has enough fields
-                            const requiredFields = eventSpecs[event.value().toLowerCase()]
+                            const requiredFields = eventSpecs[event?.stringVal?.value.toLowerCase()]
                             const good = true
                             for (const f of requiredFields) {
                                 if (!data[f]) {
@@ -575,7 +530,7 @@ const Contract = class {
                                 }
                             }
                             if (good) {
-                                acc = [...acc, { name: event.value(), data }];
+                                acc = [...acc, { name: event.stringVal?.value, data }];
                             }
                         }
                     }
@@ -605,20 +560,19 @@ const Contract = class {
      * object has deploy hashes as keys and the corresponding parsed events as values.
      */
     static async parseEventsForBlock(eventSpecs, blockNumber, contractPackageHash, nodeAddress) {
-        const client = new CasperServiceByJsonRPC(
-            nodeAddress
-        );
+        const client = new CasperSDK.RpcClient(new CasperSDK.HttpHandler(nodeAddress));
 
-        const block = await client.getBlockInfoByHeight(blockNumber);
-        const deployHashes = block.block.body.deploy_hashes;
+        const block = await client.getBlockByHeight(blockNumber);
+        const deployHashes = block.block.transactions.map(e => e.hash.toHex())
         const ret = {}
 
         for (const h of deployHashes) {
-            let deployResult = await client.getDeployInfo(h);
-            if (deployResult.execution_results) {
-                let result = deployResult.execution_results[0];
-                if (result.result.Success) {
-                    const events = await Contract.parseEvents(eventSpecs, deployResult, contractPackageHash)
+            let deployResult = await client.getDeploy(h);
+            const executionInfo = deployResult.toInfoGetTransactionResult()
+            if (executionInfo.executionInfo && executionInfo.executionInfo.executionResult) {
+                let result = executionInfo.executionInfo.executionResult
+                if (!result.errorMessage) {
+                    const events = Contract.parseEvents(eventSpecs, result, contractPackageHash)
                     if (events) {
                         ret[h] = events
                     }
@@ -759,18 +713,10 @@ const Contract = class {
         nodeAddress,
     ) {
         const client = createRpcClient(nodeAddress)
-        // if (publicKey.cryptoAlg == CasperSDK.KeyAlgorithm.ED25519) {
-        //     signature = CasperSDK.
-        // }
-        const approval = new CasperSDK.Approval(publicKey, signature)
-        // approval.signer = publicKey.toHex()
-        // if (publicKey.isEd25519()) {
-        //     approval.signature = Keys.Ed25519.accountHex(signature)
-        // } else {
-        //     approval.signature = Keys.Secp256K1.accountHex(signature)
-        // }
+        const algBytes = Uint8Array.of(publicKey.cryptoAlg)
+        signature = [...algBytes, ...signature]
+        const approval = new CasperSDK.Approval(publicKey, new CasperSDK.HexBytes(signature))
         deploy.approvals.push(approval)
-
         const deployHash = await client.putDeploy(deploy)
         return deployHash.deployHash.toHex()
     }
