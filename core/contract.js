@@ -635,9 +635,8 @@ const Contract = class {
      * (Application Binary Interface) and other metadata.
      */
     static async getPackageInfo(contractPackageHash, nodeAddress) {
-        const stateRootHash = await getStateRootHash(nodeAddress)
         const rpcClient = createRpcClient(nodeAddress)
-        const state = await rpcClient.queryGlobalStateByStateHash(stateRootHash, `hash-${contractPackageHash}`, [])
+        const state = await rpcClient.getStateItem(null, `hash-${contractPackageHash}`, [])
         const packageInfo = state.storedValue.contractPackage
         return packageInfo
     }
