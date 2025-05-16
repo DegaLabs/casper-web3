@@ -328,51 +328,23 @@ const Contract = class {
         const namedKeys = this.namedKeys
         for (const _nk of this.namedKeysList) {
             const nk = camelCased(_nk)
-            this.getter[`${nk}`] = async function (itemKey, isRaw, stateRootHash) {
+            this.getter[`${nk}`] = async function (itemKey) {
                 try {
                     const rpcClient = createRpcClient(nodeAddress)
                     const namedKey = namedKeys.find(e => e.name == _nk)
                     const uref = namedKey.key.uRef.toString()
-                    let stateOfNK = await rpcClient.getStateItem(null, `uref-${uref}`, [])
-                    stateOfNK = stateOfNK.storedValue.clValue
-                    console.log('stateOfNK', stateOfNK)
-                    if (stateOfNK) {
-                        if (stateOfNK.type.typeName == 'Unit') {
-                            const transport = new HTTPTransport(nodeAddress);
-                            const client = new Client(new RequestManager([transport]));
-                            const res = await client.request({
-                                method: 'state_get_dictionary_item',
-                                params: {
-                                    state_root_hash: stateRootHash,
-                                    dictionary_identifier: {
-                                        URef: {
-                                            seed_uref: uref,
-                                            dictionary_item_key: itemKey
-                                        }
-                                    }
-                                }
-                            });
-                            let storedValueJson;
-                            if (res.error) {
-                                throw new Error("Cannot read raw data")
-                            } else {
-                                storedValueJson = res.stored_value;
-                            }
-                            if (isRaw) {
-                                const rawBytes = Uint8Array.from(Buffer.from(storedValueJson.CLValue.bytes, 'hex'))
-                                return rawBytes
-                            } else {
-                                const serializer = new TypedJSON(StoredValue);
-                                const storedValue = serializer.parse(storedValueJson)
-                                if (storedValue && storedValue.CLValue instanceof CLValue) {
-                                    return storedValue.CLValue.value();
-                                } else {
-                                    throw Error("Invalid stored value");
-                                }
-                            }
-                        } else {
-                            return stateOfNK
-                        }
+
+                    if (!itemKey) {
+                        let stateOfNK = await rpcClient.getStateItem(null, `uref-${uref}`, [])
+                        return stateOfNK.storedValue.clValue
+                    } else {
+                        // read dictionary
+                        const val = await rpcClient.getDictionaryItemByIdentifier(null, new CasperSDK.ParamDictionaryIdentifier(
+                            null,
+                            null,
+                            new CasperSDK.ParamDictionaryIdentifierURef(itemKey, `uref-${uref}`)
+                        ))
+                        return val.storedValue.clValue
                     }
                     return null
                 } catch (e) {
