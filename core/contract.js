@@ -60,7 +60,7 @@ function serializeParam(t, v) {
 
     const type = t
     if (typeof type === typeof {}) {
-        if (CasperSDK.LIST_TYPE in type) {
+        if (CasperSDK.CLTypeList in type) {
             const inner = matchTypeToCLType(type[CasperSDK.LIST_TYPE]);
             return CLValueBuilder.list(v.map(e => serializeParam(inner.toString(), e)))
         }
@@ -517,20 +517,35 @@ const Contract = class {
     }
 
     /**
- * This function make unsigned deploy of install a smart contract on a specified blockchain network and returns the
- * unsigned deploy .
- * @returns the unsigned deploy of the install contract.
- */
+     * Creates an unsigned deploy to install a contract on the Casper network.
+     * 
+     * @param {Object} options - Installation options object
+     * @param {Object} options.keys - Object containing keys information
+     * @param {import("casper-js-sdk").PublicKey} options.keys.publicKey - The public key of the account installing the contract
+     * @param {String} options.wasmPath - Path to the contract's WASM file or raw WASM bytes
+     * @param {Record<string, CLValue>} options.args - Arguments to pass to the contract constructor
+     * @param {Number | String} options.paymentAmount - Amount in motes to pay for the deploy execution
+     * @param {String} [options.chainName="casper"] - Name of the chain to deploy to
+     * @param {Number} [options.ttl=1800000] - Time to live for the deploy in milliseconds
+     * @param {Number} [options.gasPrice=1] - Gas price for the deploy
+     * @param {String} [options.dependencies=[]] - List of deploy hashes this deploy depends on
+     * 
+     * @returns {Deploy} An unsigned deploy object ready to be signed
+     */
     static async makeUnsignedInstallContract({ keys, args, paymentAmount, chainName, wasmPath }) {
-        const runtimeArgs = RuntimeArgs.fromMap(args);
+        const runtimeArgs = CasperSDK.Args.fromMap(args);
         const wasmCodeFile = fs.readFileSync(wasmPath, null).buffer;
-        const session = DeployUtil.ExecutableDeployItem.newModuleBytes(
+        const session = CasperSDK.ExecutableDeployItem.newModuleBytes(
             new Uint8Array(wasmCodeFile),
             runtimeArgs
         );
-        const deployParams = new DeployUtil.DeployParams(CasperSDK.CLPublicKey.fromHex(keys.publicKey.toHex()), chainName)
-        const payment = DeployUtil.standardPayment(paymentAmount);
-        return DeployUtil.makeDeploy(deployParams, session, payment)
+        const deployHeader = CasperSDK.DeployHeader.default()
+        deployHeader.account = keys.publicKey
+        deployHeader.chainName = chainName
+        deployHeader.ttl = new CasperSDK.Duration(ttl)
+
+        const payment = CasperSDK.ExecutableDeployItem.standardPayment(paymentAmount);
+        return CasperSDK.Deploy.makeDeploy(deployHeader, payment, session)
     }
 
 
