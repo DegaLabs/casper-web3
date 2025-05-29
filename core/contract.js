@@ -532,7 +532,7 @@ const Contract = class {
      * 
      * @returns {Deploy} An unsigned deploy object ready to be signed
      */
-    static async makeUnsignedInstallContract({ keys, args, paymentAmount, chainName, wasmPath }) {
+    static async makeUnsignedInstallContract({ keys, args, paymentAmount, chainName, wasmPath, ttl = DEFAULT_TTL }) {
         const runtimeArgs = CasperSDK.Args.fromMap(args);
         const wasmCodeFile = fs.readFileSync(wasmPath, null).buffer;
         const session = CasperSDK.ExecutableDeployItem.newModuleBytes(
